@@ -18,7 +18,17 @@ namespace WindowsShutdownHelper.functions
 
         public static void Prewarm()
         {
-            _ = _sharedEnvironment.Value;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _sharedEnvironment.Value.ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Ignore prewarm failures; initialization will retry on first real use.
+                }
+            });
         }
 
         private static Task<CoreWebView2Environment> CreateEnvironmentAsync()

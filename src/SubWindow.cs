@@ -14,8 +14,11 @@ namespace WindowsShutdownHelper
     {
         private readonly string _pageName;
         private bool _webViewReady;
+        private bool _allowClose;
         private Panel _loadingOverlay;
         private Label _loadingLabel;
+        private Timer _loadingDelayTimer;
+        private const int LoadingOverlayDelayMs = 350;
 
         public SubWindow(string pageName, string title)
         {
@@ -60,6 +63,20 @@ namespace WindowsShutdownHelper
 
         private void InitializeLoadingOverlay()
         {
+            _loadingDelayTimer = new Timer
+            {
+                Interval = LoadingOverlayDelayMs
+            };
+            _loadingDelayTimer.Tick += (s, e) =>
+            {
+                _loadingDelayTimer.Stop();
+                if (!_webViewReady && _loadingOverlay != null)
+                {
+                    _loadingOverlay.Visible = true;
+                    _loadingOverlay.BringToFront();
+                }
+            };
+
             _loadingLabel = new Label
             {
                 Dock = DockStyle.Fill,
@@ -77,6 +94,7 @@ namespace WindowsShutdownHelper
 
             _loadingOverlay.Controls.Add(_loadingLabel);
             Controls.Add(_loadingOverlay);
+            _loadingOverlay.Visible = false;
             _loadingOverlay.BringToFront();
         }
 
@@ -84,14 +102,34 @@ namespace WindowsShutdownHelper
         {
             if (_loadingOverlay == null) return;
             _loadingLabel.Text = mainForm.language?.common_loading ?? "Yükleniyor...";
-            _loadingOverlay.Visible = true;
-            _loadingOverlay.BringToFront();
+            _loadingOverlay.Visible = false;
+            _loadingDelayTimer?.Stop();
+            _loadingDelayTimer?.Start();
         }
 
         private void HideLoadingOverlay()
         {
             if (_loadingOverlay == null) return;
+            _loadingDelayTimer?.Stop();
             _loadingOverlay.Visible = false;
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (!_allowClose && !mainForm.isApplicationExiting)
+            {
+                e.Cancel = true;
+                Hide();
+                return;
+            }
+
+            base.OnFormClosing(e);
+        }
+
+        public void ForceClose()
+        {
+            _allowClose = true;
+            Close();
         }
 
         private void SendInitData()

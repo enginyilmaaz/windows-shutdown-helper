@@ -19,16 +19,21 @@ namespace WindowsShutdownHelper
         public static settings settings = new settings();
         public static bool isDeletedFromNotifier;
         public static bool isSkippedCertainTimeAction;
+        public static bool isApplicationExiting;
         public static Timer timer = new Timer();
         public static int runInTaskbarCounter;
 
         private bool _webViewReady;
+        private bool _bootDataReady;
+        private bool _initSent;
         private bool _isPaused;
         private DateTime? _pauseUntilTime;
         private settings _cachedSettings;
         private Dictionary<string, SubWindow> _subWindows = new Dictionary<string, SubWindow>();
         private Panel _loadingOverlay;
         private Label _loadingLabel;
+        private Timer _loadingDelayTimer;
+        private const int LoadingOverlayDelayMs = 350;
 
         public mainForm()
         {
@@ -84,12 +89,12 @@ namespace WindowsShutdownHelper
             if (changed) writeJsonToActionList();
         }
 
-        private async void mainForm_Load(object sender, EventArgs e)
+        private void mainForm_Load(object sender, EventArgs e)
         {
             ShowLoadingOverlay();
 
-            // Initialize WebView2 first - this is the slowest operation
-            await InitializeWebView();
+            // Start WebView initialization in parallel with app boot data setup.
+            _ = InitializeWebView();
 
             Text = language.main_FormName;
             notifyIcon_main.Text = language.main_FormName + " " + language.notifyIcon_main;
@@ -130,6 +135,9 @@ namespace WindowsShutdownHelper
                 ? System.Drawing.Color.FromArgb(26, 27, 46)
                 : System.Drawing.Color.FromArgb(240, 242, 245);
 
+            _bootDataReady = true;
+            TrySendInitData();
+
             // Log app started in background
             _ = System.Threading.Tasks.Task.Run(() => Logger.doLog(config.actionTypes.appStarted, _cachedSettings));
         }
@@ -157,12 +165,25 @@ namespace WindowsShutdownHelper
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _webViewReady = true;
-            HideLoadingOverlay();
-            SendInitData();
+            TrySendInitData();
         }
 
         private void InitializeLoadingOverlay()
         {
+            _loadingDelayTimer = new Timer
+            {
+                Interval = LoadingOverlayDelayMs
+            };
+            _loadingDelayTimer.Tick += (s, e) =>
+            {
+                _loadingDelayTimer.Stop();
+                if (!_initSent && _loadingOverlay != null)
+                {
+                    _loadingOverlay.Visible = true;
+                    _loadingOverlay.BringToFront();
+                }
+            };
+
             _loadingLabel = new Label
             {
                 Dock = DockStyle.Fill,
@@ -180,6 +201,7 @@ namespace WindowsShutdownHelper
 
             _loadingOverlay.Controls.Add(_loadingLabel);
             Controls.Add(_loadingOverlay);
+            _loadingOverlay.Visible = false;
             _loadingOverlay.BringToFront();
         }
 
@@ -187,14 +209,24 @@ namespace WindowsShutdownHelper
         {
             if (_loadingOverlay == null) return;
             _loadingLabel.Text = language?.common_loading ?? "Yükleniyor...";
-            _loadingOverlay.Visible = true;
-            _loadingOverlay.BringToFront();
+            _loadingOverlay.Visible = false;
+            _loadingDelayTimer?.Stop();
+            _loadingDelayTimer?.Start();
         }
 
         private void HideLoadingOverlay()
         {
             if (_loadingOverlay == null) return;
+            _loadingDelayTimer?.Stop();
             _loadingOverlay.Visible = false;
+        }
+
+        private void TrySendInitData()
+        {
+            if (_initSent || !_webViewReady || !_bootDataReady) return;
+            _initSent = true;
+            SendInitData();
+            HideLoadingOverlay();
         }
 
         private void SendInitData()
@@ -351,9 +383,22 @@ namespace WindowsShutdownHelper
                     HandleResumeActions();
                     break;
                 case "exitApp":
+                    isApplicationExiting = true;
+                    CloseAllSubWindows();
                     Logger.doLog(config.actionTypes.appTerminated);
                     Application.ExitThread();
                     break;
+            }
+        }
+
+        private void CloseAllSubWindows()
+        {
+            foreach (var sw in _subWindows.Values.ToList())
+            {
+                if (!sw.IsDisposed)
+                {
+                    sw.ForceClose();
+                }
             }
         }
 
@@ -841,6 +886,12 @@ namespace WindowsShutdownHelper
                     Hide();
                 }
             }
+
+            if (!e.Cancel)
+            {
+                isApplicationExiting = true;
+                CloseAllSubWindows();
+            }
         }
 
         private void mainForm_FormClosed(object sender, FormClosedEventArgs e)
@@ -850,6 +901,8 @@ namespace WindowsShutdownHelper
 
         private void exitTheProgramToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            isApplicationExiting = true;
+            CloseAllSubWindows();
             Logger.doLog(config.actionTypes.appTerminated);
             Application.ExitThread();
         }

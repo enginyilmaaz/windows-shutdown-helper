@@ -138,6 +138,8 @@
         renderPage();
     }
 
+    ensurePageLoaded(pageName).catch(function () { });
+
     window.App = {
         navigate: navigate,
         closeModal: function () { }

@@ -13,6 +13,7 @@ const App = {
 
     init() {
         var self = this;
+        this.ensurePageLoaded('main').catch(function () { });
 
         // ─── Hamburger menu ───
         var menuBtn = document.getElementById('menu-btn');
@@ -165,6 +166,9 @@ const App = {
         // ─── Wait for init from C# ───
         Bridge.on('init', function () {
             self._applyLanguage();
+            setTimeout(function () { self.ensurePageLoaded('settings').catch(function () { }); }, 200);
+            setTimeout(function () { self.ensurePageLoaded('logs').catch(function () { }); }, 350);
+            setTimeout(function () { self.ensurePageLoaded('about').catch(function () { }); }, 500);
             self.navigate('main');
         });
 
