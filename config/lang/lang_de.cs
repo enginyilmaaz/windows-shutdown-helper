@@ -119,6 +119,7 @@ namespace WindowsShutdownHelper.lang
                 settingsForm_theme_dark = "Dunkel",
                 settingsForm_theme_light = "Hell",
                 settingsForm_theme_system = "Systemstandard",
+                about_menuItem = "Über",
 
             };
             return lang;

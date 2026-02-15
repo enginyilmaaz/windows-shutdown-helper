@@ -833,3 +833,57 @@ body {
 #page-container::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover);
 }
+
+/* ─── About Page ─── */
+.about-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.about-app-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+}
+
+.about-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.about-label {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-muted);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.about-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.about-link {
+    font-size: 13px;
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.about-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+.about-divider {
+    height: 1px;
+    background: var(--border-row);
+    margin: 8px 0;
+}

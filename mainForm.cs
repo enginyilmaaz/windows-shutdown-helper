@@ -97,6 +97,8 @@ namespace WindowsShutdownHelper
                 language.contextMenuStrip_notifyIcon_showSettings;
             contextMenuStrip_notifyIcon.Items[(int)enum_cmStrip_notifyIcon.ShowLogs].Text =
                 language.contextMenuStrip_notifyIcon_showLogs;
+            contextMenuStrip_notifyIcon.Items[(int)enum_cmStrip_notifyIcon.About].Text =
+                language.about_menuItem ?? "About";
 
             // Apply modern tray menu renderer based on theme
             _cachedSettings = LoadSettings();
@@ -153,11 +155,23 @@ namespace WindowsShutdownHelper
             // Build translated actions for display
             var displayActions = GetTranslatedActions();
 
+            var settingsObj = _cachedSettings ?? LoadSettings();
             var initData = new
             {
                 language = langDict,
                 actions = displayActions,
-                settings = _cachedSettings ?? LoadSettings()
+                settings = new
+                {
+                    settingsObj.logsEnabled,
+                    settingsObj.startWithWindows,
+                    settingsObj.runInTaskbarWhenClosed,
+                    settingsObj.isCountdownNotifierEnabled,
+                    settingsObj.countdownNotifierSeconds,
+                    settingsObj.language,
+                    settingsObj.theme,
+                    appVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString(),
+                    buildId = BuildInfo.CommitId
+                }
             };
 
             PostMessage("init", initData);
@@ -264,6 +278,14 @@ namespace WindowsShutdownHelper
                 case "openWindow":
                     string page = data.GetProperty("page").GetString();
                     OpenSubWindow(page);
+                    break;
+                case "openUrl":
+                    string url = data.GetProperty("url").GetString();
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    });
                     break;
                 case "exitApp":
                     Logger.doLog(config.actionTypes.appTerminated);
@@ -498,23 +520,9 @@ namespace WindowsShutdownHelper
             var list = new List<object>();
             list.Add(new { langCode = "auto", langName = (language.settingsForm_combobox_auto_lang ?? "Auto") });
 
-            string langDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lang");
-            if (Directory.Exists(langDir))
+            foreach (var entry in languageSelector.GetLanguageNames())
             {
-                foreach (string file in Directory.GetFiles(langDir, "lang_*.json"))
-                {
-                    string code = Path.GetFileNameWithoutExtension(file).Replace("lang_", "");
-                    try
-                    {
-                        var langObj = JsonSerializer.Deserialize<language>(File.ReadAllText(file));
-                        string name = langObj?.langNativeName ?? code.ToUpper();
-                        list.Add(new { langCode = code, langName = name });
-                    }
-                    catch
-                    {
-                        list.Add(new { langCode = code, langName = code.ToUpper() });
-                    }
-                }
+                list.Add(new { langCode = entry.langCode, langName = entry.LangName });
             }
 
             PostMessage("languageList", list);
@@ -563,6 +571,9 @@ namespace WindowsShutdownHelper
                     break;
                 case "logs":
                     title = language.logViewerForm_Name ?? "Logs";
+                    break;
+                case "about":
+                    title = language.about_menuItem ?? "About";
                     break;
                 default:
                     title = language.main_FormName ?? "Windows Shutdown Helper";
@@ -690,6 +701,11 @@ namespace WindowsShutdownHelper
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             OpenSubWindow("settings");
+        }
+
+        private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenSubWindow("about");
         }
 
         private void showTheLogsToolStripMenuItem_Click(object sender, EventArgs e)

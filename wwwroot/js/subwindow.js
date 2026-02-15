@@ -6,7 +6,8 @@
     var pages = {
         main: MainPage,
         settings: SettingsPage,
-        logs: LogsPage
+        logs: LogsPage,
+        about: AboutPage
     };
 
     function applyLanguage() {
@@ -20,6 +21,8 @@
             title.textContent = L('settingsForm_Name') || 'Settings';
         } else if (pageName === 'logs') {
             title.textContent = L('logViewerForm_Name') || 'Logs';
+        } else if (pageName === 'about') {
+            title.textContent = L('about_menuItem') || 'About';
         } else {
             title.textContent = L('main_FormName') || 'Windows Shutdown Helper';
         }

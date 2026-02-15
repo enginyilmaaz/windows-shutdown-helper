@@ -5,8 +5,9 @@
         AddNewAction = 0,
         Settings = 1,
         ShowLogs = 2,
-        Separator = 3,
-        ExitTheProgram = 4
+        About = 3,
+        Separator = 4,
+        ExitTheProgram = 5
     }
 
 }

@@ -131,5 +131,7 @@
         public string settingsForm_theme_light { get; set; }
         public string settingsForm_theme_system { get; set; }
 
+        public string about_menuItem { get; set; }
+
     }
 }

@@ -119,6 +119,7 @@
                 settingsForm_theme_dark = "Dark",
                 settingsForm_theme_light = "Light",
                 settingsForm_theme_system = "System Default",
+                about_menuItem = "About",
 
             };
             return lang;

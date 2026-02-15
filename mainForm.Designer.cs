@@ -26,6 +26,7 @@ namespace WindowsShutdownHelper
             this.addNewActionToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.showTheLogsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.exitTheProgramToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 
@@ -47,6 +48,7 @@ namespace WindowsShutdownHelper
                 this.addNewActionToolStripMenuItem,
                 this.settingsToolStripMenuItem,
                 this.showTheLogsToolStripMenuItem,
+                this.aboutToolStripMenuItem,
                 this.toolStripSeparator1,
                 this.exitTheProgramToolStripMenuItem
             });
@@ -74,6 +76,13 @@ namespace WindowsShutdownHelper
             this.showTheLogsToolStripMenuItem.Size = new System.Drawing.Size(200, 36);
             this.showTheLogsToolStripMenuItem.Text = "Show logs";
             this.showTheLogsToolStripMenuItem.Click += new System.EventHandler(this.showTheLogsToolStripMenuItem_Click);
+
+            // aboutToolStripMenuItem
+            this.aboutToolStripMenuItem.Image = global::WindowsShutdownHelper.Properties.Resources.about;
+            this.aboutToolStripMenuItem.Name = "aboutToolStripMenuItem";
+            this.aboutToolStripMenuItem.Size = new System.Drawing.Size(200, 36);
+            this.aboutToolStripMenuItem.Text = "About";
+            this.aboutToolStripMenuItem.Click += new System.EventHandler(this.aboutToolStripMenuItem_Click);
 
             // exitTheProgramToolStripMenuItem
             this.exitTheProgramToolStripMenuItem.Image = global::WindowsShutdownHelper.Properties.Resources.exit;
@@ -118,6 +127,7 @@ namespace WindowsShutdownHelper
         private System.Windows.Forms.ToolStripMenuItem addNewActionToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem showTheLogsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripMenuItem exitTheProgramToolStripMenuItem;
     }

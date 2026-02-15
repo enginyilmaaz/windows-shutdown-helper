@@ -4,7 +4,8 @@ const App = {
     _pages: {
         main: MainPage,
         settings: SettingsPage,
-        logs: LogsPage
+        logs: LogsPage,
+        about: AboutPage
     },
 
     init() {
@@ -77,6 +78,9 @@ const App = {
 
         var miExit = document.getElementById('mi-exit-text');
         if (miExit) miExit.textContent = L('contextMenuStrip_notifyIcon_exitProgram') || 'Exit';
+
+        var miAbout = document.getElementById('mi-about-text');
+        if (miAbout) miAbout.textContent = L('about_menuItem') || 'About';
     },
 
     navigate(page) {

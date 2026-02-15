@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -82,6 +83,31 @@ namespace WindowsShutdownHelper.functions
             {
                 jsonWriter.WriteJson(path, true, lang);
             }
+        }
+
+        public static List<languageNames> GetLanguageNames()
+        {
+            var list = new List<languageNames>();
+            var langs = new (string code, language lang)[]
+            {
+                ("en", lang_en.lang_english()),
+                ("tr", lang_tr.lang_turkish()),
+                ("it", lang_it.lang_italian()),
+                ("de", lang_de.lang_german()),
+                ("fr", lang_fr.lang_french()),
+                ("ru", lang_ru.lang_russian()),
+            };
+
+            foreach (var entry in langs)
+            {
+                list.Add(new languageNames
+                {
+                    langCode = entry.code,
+                    LangName = entry.lang?.langNativeName ?? entry.code.ToUpper()
+                });
+            }
+
+            return list;
         }
     }
 }

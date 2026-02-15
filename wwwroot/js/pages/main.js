@@ -48,6 +48,7 @@ const MainPage = {
         '<div class="context-menu" id="ctx-menu">' +
             '<div class="context-menu-item" id="ctx-delete">' + L('contextMenuStrip_mainGrid_deleteSelectedAction') + '</div>' +
             '<div class="context-menu-item danger" id="ctx-clear">' + L('contextMenuStrip_mainGrid_deleteAllAction') + '</div>' +
+            '<div class="context-menu-item" id="ctx-about">About</div>' +
         '</div>';
     },
 
@@ -116,6 +117,10 @@ const MainPage = {
 
         document.getElementById('ctx-clear').addEventListener('click', function () {
             Bridge.send('clearAllActions', {});
+        });
+
+        document.getElementById('ctx-about').addEventListener('click', function () {
+            Bridge.send('openWindow', { page: 'about' });
         });
 
         // Render table

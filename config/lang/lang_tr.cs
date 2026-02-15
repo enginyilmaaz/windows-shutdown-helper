@@ -120,6 +120,7 @@
                 settingsForm_theme_dark = "Koyu",
                 settingsForm_theme_light = "Açık",
                 settingsForm_theme_system = "Sistem Varsayılanı",
+                about_menuItem = "Hakkında",
 
             };
 
