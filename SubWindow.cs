@@ -64,7 +64,7 @@ namespace WindowsShutdownHelper
             {
                 Dock = DockStyle.Fill,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.SemiBold),
+                Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
                 ForeColor = System.Drawing.Color.FromArgb(95, 99, 112),
                 Text = mainForm.language?.common_loading ?? "Yükleniyor..."
             };

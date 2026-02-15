@@ -131,7 +131,7 @@ namespace WindowsShutdownHelper
                 : System.Drawing.Color.FromArgb(240, 242, 245);
 
             // Log app started in background
-            System.Threading.Tasks.Task.Run(() => Logger.doLog(config.actionTypes.appStarted, _cachedSettings));
+            _ = System.Threading.Tasks.Task.Run(() => Logger.doLog(config.actionTypes.appStarted, _cachedSettings));
         }
 
         private async System.Threading.Tasks.Task InitializeWebView()
@@ -167,7 +167,7 @@ namespace WindowsShutdownHelper
             {
                 Dock = DockStyle.Fill,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.SemiBold),
+                Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold),
                 ForeColor = System.Drawing.Color.FromArgb(95, 99, 112),
                 Text = language?.common_loading ?? "Yükleniyor..."
             };
