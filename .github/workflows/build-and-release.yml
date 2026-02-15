@@ -61,7 +61,7 @@ jobs:
       - name: Inject Build ID
         shell: pwsh
         run: |
-          $file = "Windows Shutdown Helper/BuildInfo.cs"
+          $file = "BuildInfo.cs"
           (Get-Content $file) -replace 'public const string CommitId = "dev"', "public const string CommitId = ""${{ steps.version.outputs.commit_short }}""" | Set-Content $file
 
       - name: Build Release
@@ -79,7 +79,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: WindowsShutdownHelper_Portable
-          path: Windows Shutdown Helper/bin/Release/Windows Shutdown Helper.exe
+          path: |
+            bin/Release/Windows Shutdown Helper.exe
+            bin/Release/wwwroot/
 
       - name: Upload Installer (dev)
         if: github.ref_name != 'master'
@@ -98,4 +100,3 @@ jobs:
           make_latest: true
           files: |
             installer_output/${{ steps.version.outputs.setup_name }}.exe
-            Windows Shutdown Helper/bin/Release/Windows Shutdown Helper.exe

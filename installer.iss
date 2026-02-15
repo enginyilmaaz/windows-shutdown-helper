@@ -24,7 +24,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer_output
 OutputBaseFilename={#OutputName}
-SetupIconFile=Windows Shutdown Helper\setup.ico
+SetupIconFile=setup.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/max
 SolidCompression=yes
@@ -43,7 +43,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startupentry"; Description: "Windows ile birlikte baslat / Start with Windows"; GroupDescription: "Diger secenekler / Other options:"; Flags: unchecked
 
 [Files]
-Source: "Windows Shutdown Helper\bin\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "bin\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "bin\Release\wwwroot\*"; DestDir: "{app}\wwwroot"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -61,3 +62,4 @@ Type: files; Name: "{app}\settings.json"
 Type: files; Name: "{app}\actionList.json"
 Type: files; Name: "{app}\logs.json"
 Type: filesandordirs; Name: "{app}\lang"
+Type: filesandordirs; Name: "{app}\wwwroot"
