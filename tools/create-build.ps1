@@ -3,7 +3,6 @@
     Windows Shutdown Helper - Local Build Script
 .DESCRIPTION
     Builds the project using the local .NET 8 SDK from tools/dotnet/.
-    Falls back to system dotnet if local not found.
 .PARAMETER Configuration
     Build configuration: Debug or Release (default: Release)
 .PARAMETER SkipRestore
@@ -78,34 +77,22 @@ if ($InstallSdk) {
     Write-Host "  [OK] .NET 8 SDK installed." -ForegroundColor Green
 }
 
-# --- Step 1: Find dotnet ---
+# --- Step 1: Check local dotnet SDK ---
 Write-Step "Checking .NET SDK"
-$dotnetCmd = $null
+$dotnetCmd = $localDotnetExe
+$env:DOTNET_ROOT = $localDotnet
 
-# 1) Local SDK
-if (Test-Path $localDotnetExe) {
-    $dotnetCmd = $localDotnetExe
-    $env:DOTNET_ROOT = $localDotnet
-    $ver = & $dotnetCmd --version
-    Write-Host "  [OK] Local SDK: dotnet $ver" -ForegroundColor Green
-}
-# 2) System dotnet
-elseif (Get-Command dotnet -ErrorAction SilentlyContinue) {
-    $dotnetCmd = "dotnet"
-    $ver = dotnet --version
-    Write-Host "  [OK] System SDK: dotnet $ver" -ForegroundColor Green
-}
-else {
-    Write-Host "  [ERROR] dotnet SDK not found!" -ForegroundColor Red
+if (-not (Test-Path $dotnetCmd)) {
+    Write-Host "  [ERROR] Local .NET SDK not found at: $localDotnet" -ForegroundColor Red
     Write-Host ""
-    Write-Host "  Option 1: Install locally into this project:" -ForegroundColor Yellow
+    Write-Host "  Run the following command to install it:" -ForegroundColor Yellow
     Write-Host "    .\create-build.ps1 -InstallSdk" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  Option 2: Install system-wide:" -ForegroundColor Yellow
-    Write-Host "    https://dotnet.microsoft.com/download/dotnet/8.0" -ForegroundColor Yellow
     Write-Host ""
     exit 1
 }
+
+$ver = & $dotnetCmd --version
+Write-Host "  [OK] Local SDK: $ver ($localDotnet)" -ForegroundColor Green
 
 # --- Step 2: Clean (optional) ---
 if ($Clean) {

@@ -2,7 +2,6 @@
 # =============================================
 #  Windows Shutdown Helper - Build Script
 #  Uses local .NET 8 SDK from tools/dotnet/
-#  Falls back to system dotnet if local not found
 # =============================================
 
 set -e
@@ -96,34 +95,22 @@ if [ "$INSTALL_SDK" = true ]; then
     echo -e "  ${GREEN}[OK] .NET 8 SDK installed.${NC}"
 fi
 
-# --- Step 1: Find dotnet ---
+# --- Step 1: Check local dotnet SDK ---
 step "Checking .NET SDK"
-DOTNET=""
+DOTNET="$LOCAL_DOTNET"
+export DOTNET_ROOT="$TOOLS_DIR/dotnet"
 
-# 1) Local SDK in tools/dotnet/
-if [ -x "$LOCAL_DOTNET" ]; then
-    DOTNET="$LOCAL_DOTNET"
-    export DOTNET_ROOT="$TOOLS_DIR/dotnet"
-    DOTNET_VER=$("$DOTNET" --version 2>&1)
-    echo -e "  ${GREEN}[OK]${NC} Local SDK: dotnet $DOTNET_VER"
-# 2) System dotnet
-elif command -v dotnet &>/dev/null; then
-    DOTNET="dotnet"
-    DOTNET_VER=$(dotnet --version 2>&1)
-    echo -e "  ${GREEN}[OK]${NC} System SDK: dotnet $DOTNET_VER"
-else
-    echo -e "  ${RED}[ERROR] dotnet SDK not found!${NC}"
+if [ ! -x "$DOTNET" ]; then
+    echo -e "  ${RED}[ERROR] Local .NET SDK not found at: $TOOLS_DIR/dotnet/${NC}"
     echo ""
-    echo -e "  ${YELLOW}Option 1: Install locally into this project:${NC}"
+    echo -e "  ${YELLOW}Run the following command to install it:${NC}"
     echo -e "  ${YELLOW}  ./create-build.sh --install-sdk${NC}"
-    echo ""
-    echo -e "  ${YELLOW}Option 2: Install system-wide:${NC}"
-    echo -e "  ${YELLOW}  Ubuntu/Debian : sudo apt install dotnet-sdk-8.0${NC}"
-    echo -e "  ${YELLOW}  Fedora        : sudo dnf install dotnet-sdk-8.0${NC}"
-    echo -e "  ${YELLOW}  macOS         : brew install dotnet-sdk${NC}"
     echo ""
     exit 1
 fi
+
+DOTNET_VER=$("$DOTNET" --version 2>&1)
+echo -e "  ${GREEN}[OK]${NC} Local SDK: $DOTNET_VER ($TOOLS_DIR/dotnet/)"
 
 # --- Step 2: Clean (optional) ---
 if [ "$CLEAN" = true ]; then
