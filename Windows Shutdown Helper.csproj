@@ -180,14 +180,17 @@
     <Compile Include="src\config\settingsINI.cs" />
     <EmbeddedResource Include="src\mainForm.resx">
       <DependentUpon>mainForm.cs</DependentUpon>
+      <LogicalName>WindowsShutdownHelper.mainForm.resources</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="src\actionCountdownNotifier.resx">
       <DependentUpon>actionCountdownNotifier.cs</DependentUpon>
+      <LogicalName>WindowsShutdownHelper.actionCountdownNotifier.resources</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="src\properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
+      <LogicalName>WindowsShutdownHelper.Properties.Resources.resources</LogicalName>
     </EmbeddedResource>
     <Compile Include="src\properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
