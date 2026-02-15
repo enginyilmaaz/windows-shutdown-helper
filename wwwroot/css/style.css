@@ -379,6 +379,7 @@ body {
     font-size: 13px;
     font-weight: 500;
     transition: all 0.15s;
+    cursor: pointer;
 }
 
 .menu-item:hover {
