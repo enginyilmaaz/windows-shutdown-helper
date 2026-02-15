@@ -82,6 +82,7 @@ jobs:
           path: |
             bin/Release/Windows Shutdown Helper.exe
             bin/Release/wwwroot/
+            bin/Release/runtimes/
 
       - name: Upload Installer (dev)
         if: github.ref_name != 'master'
