@@ -7,6 +7,7 @@ namespace WindowsShutdownHelper.lang
             language lang = new language
             {
                 main_FormName = "Assistant d'arrêt Windows",
+                langNativeName = "Français",
                 main_groupbox_newAction = "Nouvelle Action",
                 main_label_actionType = "Type d'action",
                 main_label_trigger = "Déclencheur",

@@ -10,6 +10,7 @@
     public class language
     {
         public string main_FormName { get; set; }
+        public string langNativeName { get; set; }
         public string main_groupbox_newAction { get; set; }
         public string main_label_actionType { get; set; }
         public string main_label_trigger { get; set; }

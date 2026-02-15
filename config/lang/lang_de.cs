@@ -7,6 +7,7 @@ namespace WindowsShutdownHelper.lang
             language lang = new language
             {
                 main_FormName = "Windows Herunterfahren-Helfer",
+                langNativeName = "Deutsch",
                 main_groupbox_newAction = "Neue Aktion",
                 main_label_actionType = "Aktionstyp",
                 main_label_trigger = "Auslöser",

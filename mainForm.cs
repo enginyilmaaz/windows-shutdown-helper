@@ -507,8 +507,8 @@ namespace WindowsShutdownHelper
                     try
                     {
                         var langObj = JsonSerializer.Deserialize<language>(File.ReadAllText(file));
-                        string name = langObj?.main_FormName ?? code.ToUpper();
-                        list.Add(new { langCode = code, langName = code.ToUpper() + " - " + name });
+                        string name = langObj?.langNativeName ?? code.ToUpper();
+                        list.Add(new { langCode = code, langName = name });
                     }
                     catch
                     {

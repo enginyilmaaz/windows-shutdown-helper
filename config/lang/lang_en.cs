@@ -7,6 +7,7 @@
             language lang = new language
             {
                 main_FormName = "Shutdown Helper for Windows",
+                langNativeName = "English",
                 main_groupbox_newAction = "New Action",
                 main_label_actionType = "Action Type",
                 main_label_trigger = "Trigger",

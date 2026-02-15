@@ -7,6 +7,7 @@
             language lang = new language
             {
                 main_FormName = "Sistem Güç Yardımcısı",
+                langNativeName = "Türkçe",
                 main_groupbox_newAction = "Yeni Görev",
                 main_label_actionType = "Görev Türü",
                 main_label_trigger = "Tetikleyici",

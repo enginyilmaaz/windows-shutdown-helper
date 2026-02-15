@@ -7,6 +7,7 @@ namespace WindowsShutdownHelper.lang
             language lang = new language
             {
                 main_FormName = "Assistente Spegnimento Windows",
+                langNativeName = "Italiano",
                 main_groupbox_newAction = "Nuova Azione",
                 main_label_actionType = "Tipo di Azione",
                 main_label_trigger = "Trigger",

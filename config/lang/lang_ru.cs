@@ -7,6 +7,7 @@ namespace WindowsShutdownHelper.lang
             language lang = new language
             {
                 main_FormName = "Помощник выключения Windows",
+                langNativeName = "Русский",
                 main_groupbox_newAction = "Новое действие",
                 main_label_actionType = "Тип действия",
                 main_label_trigger = "Триггер",
