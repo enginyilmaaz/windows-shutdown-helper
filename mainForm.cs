@@ -23,6 +23,7 @@ namespace WindowsShutdownHelper
 
         private bool _webViewReady;
         private settings _cachedSettings;
+        private Dictionary<string, SubWindow> _subWindows = new Dictionary<string, SubWindow>();
 
         public mainForm()
         {
@@ -259,6 +260,10 @@ namespace WindowsShutdownHelper
                     break;
                 case "getLanguageList":
                     HandleGetLanguageList();
+                    break;
+                case "openWindow":
+                    string page = data.GetProperty("page").GetString();
+                    OpenSubWindow(page);
                     break;
                 case "exitApp":
                     Logger.doLog(config.actionTypes.appTerminated);
@@ -527,6 +532,53 @@ namespace WindowsShutdownHelper
         private void RefreshActionsInUI()
         {
             PostMessage("refreshActions", GetTranslatedActions());
+
+            // Broadcast to open sub-windows
+            foreach (var sw in _subWindows.Values.ToList())
+            {
+                if (!sw.IsDisposed)
+                    sw.BroadcastRefreshActions();
+            }
+        }
+
+        public void OpenSubWindow(string pageName)
+        {
+            // If already open, focus it
+            if (_subWindows.ContainsKey(pageName) && !_subWindows[pageName].IsDisposed)
+            {
+                _subWindows[pageName].Show();
+                _subWindows[pageName].Focus();
+                return;
+            }
+
+            // Determine title
+            string title;
+            switch (pageName)
+            {
+                case "main":
+                    title = language.main_groupbox_newAction ?? "Actions";
+                    break;
+                case "settings":
+                    title = language.settingsForm_Name ?? "Settings";
+                    break;
+                case "logs":
+                    title = language.logViewerForm_Name ?? "Logs";
+                    break;
+                default:
+                    title = language.main_FormName ?? "Windows Shutdown Helper";
+                    break;
+            }
+
+            var win = new SubWindow(pageName, title);
+            _subWindows[pageName] = win;
+
+            win.FormClosed += (s, args) =>
+            {
+                _subWindows.Remove(pageName);
+            };
+
+            win.Show();
+            win.Focus();
         }
 
         // =============== Timer & Action Execution ===============
@@ -637,14 +689,12 @@ namespace WindowsShutdownHelper
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            showMain();
-            PostMessage("navigate", "settings");
+            OpenSubWindow("settings");
         }
 
         private void showTheLogsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            showMain();
-            PostMessage("navigate", "logs");
+            OpenSubWindow("logs");
         }
 
         // =============== Theme Helpers ===============

@@ -25,12 +25,12 @@ const App = {
             }
         });
 
-        // Menu item clicks
+        // Menu item clicks - open in separate window
         document.querySelectorAll('.menu-item[data-page]').forEach(function (item) {
             item.addEventListener('click', function (e) {
                 e.preventDefault();
                 var page = this.getAttribute('data-page');
-                self.navigate(page);
+                Bridge.send('openWindow', { page: page });
                 overlay.classList.add('hidden');
             });
         });

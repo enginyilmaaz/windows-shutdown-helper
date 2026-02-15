@@ -164,6 +164,12 @@
     <Compile Include="actionCountdownNotifier.Designer.cs">
       <DependentUpon>actionCountdownNotifier.cs</DependentUpon>
     </Compile>
+    <Compile Include="SubWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SubWindow.Designer.cs">
+      <DependentUpon>SubWindow.cs</DependentUpon>
+    </Compile>
     <Compile Include="BuildInfo.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
