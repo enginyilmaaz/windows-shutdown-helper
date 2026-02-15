@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -59,9 +60,22 @@ namespace WindowsShutdownHelper
             {
                 if (action.triggerType == config.triggerTypes.fromNow)
                 {
-                    DateTime actionDate = DateTime.Parse(action.value);
-                    if (DateTime.Now > actionDate)
+                    if (DateTime.TryParseExact(
+                        action.value,
+                        "dd.MM.yyyy HH:mm:ss",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime actionDate))
                     {
+                        if (DateTime.Now > actionDate)
+                        {
+                            actionList.Remove(action);
+                            changed = true;
+                        }
+                    }
+                    else
+                    {
+                        // Remove malformed scheduled entries to avoid runtime crashes.
                         actionList.Remove(action);
                         changed = true;
                     }
@@ -693,13 +707,16 @@ namespace WindowsShutdownHelper
 
         private void doAction(ActionModel action, uint idleTimeMin)
         {
-            uint actionValueSeconds = string.IsNullOrEmpty(action.valueUnit)
-                ? Convert.ToUInt32(action.value) * 60
-                : Convert.ToUInt32(action.value);
+            if (action == null) return;
 
-            if (action.triggerType == config.triggerTypes.systemIdle && idleTimeMin == actionValueSeconds)
+            if (action.triggerType == config.triggerTypes.systemIdle)
             {
-                Actions.doActionByTypes(action);
+                if (!TryGetSystemIdleSeconds(action, out uint actionValueSeconds)) return;
+                if (idleTimeMin == actionValueSeconds)
+                {
+                    Actions.doActionByTypes(action);
+                }
+                return;
             }
 
             if (action.triggerType == config.triggerTypes.certainTime && action.value == DateTime.Now.ToString("HH:mm:ss"))
@@ -720,6 +737,31 @@ namespace WindowsShutdownHelper
                 actionList.Remove(action);
                 writeJsonToActionList();
             }
+        }
+
+        private static bool TryGetSystemIdleSeconds(ActionModel action, out uint seconds)
+        {
+            seconds = 0;
+            if (action == null || string.IsNullOrWhiteSpace(action.value))
+            {
+                return false;
+            }
+
+            if (!uint.TryParse(action.value, out uint parsed))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(action.valueUnit))
+            {
+                seconds = parsed * 60;
+            }
+            else
+            {
+                seconds = parsed;
+            }
+
+            return true;
         }
 
         private void timerTick(object sender, EventArgs e)

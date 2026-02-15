@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -38,9 +39,7 @@ namespace WindowsShutdownHelper.functions
 
                 if (action.triggerType == config.triggerTypes.systemIdle)
                 {
-                    int actionValue = string.IsNullOrEmpty(action.valueUnit)
-                        ? Convert.ToInt32(action.value) * 60
-                        : Convert.ToInt32(action.value);
+                    if (!TryGetSystemIdleSeconds(action, out int actionValue)) return;
                     string actionKey = action.createdDate + "_" + action.actionType;
 
                     if (idleTimeMin >= actionValue - settings.countdownNotifierSeconds
@@ -63,8 +62,17 @@ namespace WindowsShutdownHelper.functions
 
                 else if (action.triggerType == config.triggerTypes.fromNow)
                 {
-                    DateTime actionExecuteDate = DateTime.Parse(action.value)
-                        .AddSeconds(Convert.ToDouble(-settings.countdownNotifierSeconds));
+                    if (!DateTime.TryParseExact(
+                        action.value,
+                        "dd.MM.yyyy HH:mm:ss",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime actionExecuteDate))
+                    {
+                        return;
+                    }
+
+                    actionExecuteDate = actionExecuteDate.AddSeconds(-settings.countdownNotifierSeconds);
                     string nowDate = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
                     string executionDate = actionExecuteDate.ToString("dd.MM.yyyy HH:mm:ss");
 
@@ -87,8 +95,17 @@ namespace WindowsShutdownHelper.functions
 
                 else if (action.triggerType == config.triggerTypes.certainTime)
                 {
-                    DateTime actionExecuteDate = DateTime.Parse(action.value)
-                        .AddSeconds(Convert.ToDouble(-settings.countdownNotifierSeconds));
+                    if (!DateTime.TryParseExact(
+                        action.value,
+                        "HH:mm:ss",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime actionExecuteDate))
+                    {
+                        return;
+                    }
+
+                    actionExecuteDate = actionExecuteDate.AddSeconds(-settings.countdownNotifierSeconds);
                     string nowDate = DateTime.Now.ToString("HH:mm:ss");
                     string executionDate = actionExecuteDate.ToString("HH:mm:ss");
 
@@ -108,6 +125,31 @@ namespace WindowsShutdownHelper.functions
                     }
                 }
             }
+        }
+
+        private static bool TryGetSystemIdleSeconds(ActionModel action, out int seconds)
+        {
+            seconds = 0;
+            if (action == null || string.IsNullOrWhiteSpace(action.value))
+            {
+                return false;
+            }
+
+            if (!int.TryParse(action.value, out int parsed))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(action.valueUnit))
+            {
+                seconds = parsed * 60;
+            }
+            else
+            {
+                seconds = parsed;
+            }
+
+            return true;
         }
 
 
