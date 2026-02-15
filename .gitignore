@@ -338,3 +338,6 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+
+# Local .NET SDK (installed by tools/create-build)
+tools/dotnet/

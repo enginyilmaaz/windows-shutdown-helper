@@ -13,10 +13,10 @@ namespace WindowsShutdownHelper.functions
 
             if (settings == null)
             {
-                if (File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"))
+                if (File.Exists(AppContext.BaseDirectory + "\\settings.json"))
                 {
                     settings = JsonSerializer.Deserialize<settings>(
-                        File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"));
+                        File.ReadAllText(AppContext.BaseDirectory + "\\settings.json"));
                 }
                 else
                 {
@@ -29,10 +29,10 @@ namespace WindowsShutdownHelper.functions
             {
                 List<logSystem> logLists = new List<logSystem>();
 
-                if (File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\logs.json"))
+                if (File.Exists(AppContext.BaseDirectory + "\\logs.json"))
                 {
                     logLists = JsonSerializer.Deserialize<List<logSystem>>(
-                        File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "\\logs.json"));
+                        File.ReadAllText(AppContext.BaseDirectory + "\\logs.json"));
                 }
 
                 logSystem newLog = new logSystem
@@ -43,7 +43,7 @@ namespace WindowsShutdownHelper.functions
 
                 logLists.Add(newLog);
 
-                jsonWriter.WriteJson(AppDomain.CurrentDomain.BaseDirectory + "\\logs.json", true, logLists);
+                jsonWriter.WriteJson(AppContext.BaseDirectory + "\\logs.json", true, logLists);
             }
         }
     }

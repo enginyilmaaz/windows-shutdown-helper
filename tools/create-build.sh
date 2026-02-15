@@ -1,7 +1,8 @@
 #!/bin/bash
 # =============================================
-#  Windows Shutdown Helper - Linux Build Script
-#  Uses Mono to build .NET Framework 4.8 project
+#  Windows Shutdown Helper - Build Script
+#  Uses local .NET 8 SDK from tools/dotnet/
+#  Falls back to system dotnet if local not found
 # =============================================
 
 set -e
@@ -18,12 +19,13 @@ NC='\033[0m'
 TOOLS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$TOOLS_DIR")"
 SOLUTION_FILE="$PROJECT_ROOT/Windows Shutdown Helper.sln"
-NUGET_EXE="$TOOLS_DIR/nuget.exe"
+LOCAL_DOTNET="$TOOLS_DIR/dotnet/dotnet"
 
 # --- Defaults ---
 CONFIGURATION="Release"
 SKIP_RESTORE=false
 CLEAN=false
+INSTALL_SDK=false
 
 # --- Parse Arguments ---
 while [[ $# -gt 0 ]]; do
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
             CLEAN=true
             shift
             ;;
+        --install-sdk)
+            INSTALL_SDK=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: ./create-build.sh [OPTIONS]"
             echo ""
@@ -52,6 +58,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --release        Build in Release configuration (default)"
             echo "  --skip-restore   Skip NuGet package restore"
             echo "  --clean          Clean build output before building"
+            echo "  --install-sdk    Download .NET 8 SDK into tools/dotnet/"
             echo "  --help, -h       Show this help message"
             exit 0
             ;;
@@ -78,63 +85,57 @@ echo -e "${WHITE}  Windows Shutdown Helper - Build Script${NC}"
 echo -e "${WHITE}============================================${NC}"
 echo "  Configuration : $CONFIGURATION"
 echo "  Project Root  : $PROJECT_ROOT"
-echo "  Platform      : Linux (Mono)"
 
-# --- Step 1: Check Dependencies ---
-step "Checking Dependencies"
-
-# Check mono
-if command -v mono &>/dev/null; then
-    MONO_VER=$(mono --version 2>&1 | head -n1)
-    echo -e "  ${GREEN}[OK]${NC} mono - $MONO_VER"
-else
-    echo -e "  ${RED}[ERROR] mono not found!${NC}"
-    echo ""
-    echo -e "  ${YELLOW}Install Mono:${NC}"
-    echo -e "  ${YELLOW}  Ubuntu/Debian : sudo apt install mono-complete${NC}"
-    echo -e "  ${YELLOW}  Fedora        : sudo dnf install mono-complete${NC}"
-    echo -e "  ${YELLOW}  Arch          : sudo pacman -S mono${NC}"
-    echo -e "  ${YELLOW}  Docs          : https://www.mono-project.com/download/stable/${NC}"
-    echo ""
-    exit 1
+# --- Step 0: Install SDK if requested ---
+if [ "$INSTALL_SDK" = true ]; then
+    step "Installing .NET 8 SDK into tools/dotnet/"
+    curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+    chmod +x /tmp/dotnet-install.sh
+    /tmp/dotnet-install.sh --channel 8.0 --install-dir "$TOOLS_DIR/dotnet"
+    rm -f /tmp/dotnet-install.sh
+    echo -e "  ${GREEN}[OK] .NET 8 SDK installed.${NC}"
 fi
 
-# Check msbuild (comes with mono-complete)
-if command -v msbuild &>/dev/null; then
-    echo -e "  ${GREEN}[OK]${NC} msbuild"
-    MSBUILD_CMD="msbuild"
-elif command -v xbuild &>/dev/null; then
-    echo -e "  ${YELLOW}[WARN]${NC} msbuild not found, falling back to xbuild (deprecated)"
-    MSBUILD_CMD="xbuild"
-else
-    echo -e "  ${RED}[ERROR] msbuild not found!${NC}"
-    echo ""
-    echo -e "  ${YELLOW}Make sure you have mono-complete installed (not just mono-runtime).${NC}"
-    echo -e "  ${YELLOW}  sudo apt install mono-complete${NC}"
-    echo ""
-    exit 1
-fi
+# --- Step 1: Find dotnet ---
+step "Checking .NET SDK"
+DOTNET=""
 
-# Check nuget.exe
-if [ -f "$NUGET_EXE" ]; then
-    echo -e "  ${GREEN}[OK]${NC} nuget.exe"
+# 1) Local SDK in tools/dotnet/
+if [ -x "$LOCAL_DOTNET" ]; then
+    DOTNET="$LOCAL_DOTNET"
+    export DOTNET_ROOT="$TOOLS_DIR/dotnet"
+    DOTNET_VER=$("$DOTNET" --version 2>&1)
+    echo -e "  ${GREEN}[OK]${NC} Local SDK: dotnet $DOTNET_VER"
+# 2) System dotnet
+elif command -v dotnet &>/dev/null; then
+    DOTNET="dotnet"
+    DOTNET_VER=$(dotnet --version 2>&1)
+    echo -e "  ${GREEN}[OK]${NC} System SDK: dotnet $DOTNET_VER"
 else
-    echo -e "  ${RED}[ERROR] nuget.exe not found at: $NUGET_EXE${NC}"
+    echo -e "  ${RED}[ERROR] dotnet SDK not found!${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Option 1: Install locally into this project:${NC}"
+    echo -e "  ${YELLOW}  ./create-build.sh --install-sdk${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Option 2: Install system-wide:${NC}"
+    echo -e "  ${YELLOW}  Ubuntu/Debian : sudo apt install dotnet-sdk-8.0${NC}"
+    echo -e "  ${YELLOW}  Fedora        : sudo dnf install dotnet-sdk-8.0${NC}"
+    echo -e "  ${YELLOW}  macOS         : brew install dotnet-sdk${NC}"
+    echo ""
     exit 1
 fi
 
 # --- Step 2: Clean (optional) ---
 if [ "$CLEAN" = true ]; then
     step "Cleaning Build Output"
-    [ -d "$PROJECT_ROOT/bin" ] && rm -rf "$PROJECT_ROOT/bin" && echo "  Removed bin/"
-    [ -d "$PROJECT_ROOT/obj" ] && rm -rf "$PROJECT_ROOT/obj" && echo "  Removed obj/"
+    "$DOTNET" clean "$SOLUTION_FILE" -c "$CONFIGURATION" --nologo -v q
     echo -e "  ${GREEN}[OK] Clean complete.${NC}"
 fi
 
-# --- Step 3: Restore NuGet Packages ---
+# --- Step 3: Restore ---
 if [ "$SKIP_RESTORE" = false ]; then
     step "Restoring NuGet Packages"
-    mono "$NUGET_EXE" restore "$SOLUTION_FILE"
+    "$DOTNET" restore "$SOLUTION_FILE"
     echo -e "  ${GREEN}[OK] Packages restored.${NC}"
 fi
 
@@ -155,12 +156,12 @@ fi
 
 # --- Step 5: Build ---
 step "Building Solution ($CONFIGURATION)"
-$MSBUILD_CMD "$SOLUTION_FILE" /p:Configuration="$CONFIGURATION" /p:Platform="Any CPU" /p:SignManifests=false
+"$DOTNET" build "$SOLUTION_FILE" -c "$CONFIGURATION" --no-restore
 
 # --- Done ---
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}  BUILD SUCCEEDED${NC}"
 echo -e "${GREEN}============================================${NC}"
-echo -e "${WHITE}  Output: bin/$CONFIGURATION/${NC}"
+echo -e "${WHITE}  Output: bin/$CONFIGURATION/net8.0-windows/${NC}"
 echo ""

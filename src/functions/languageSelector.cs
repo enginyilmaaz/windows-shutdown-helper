@@ -32,7 +32,7 @@ namespace WindowsShutdownHelper.functions
         public static language languageFile()
         {
             settings settings = new settings();
-            string settingsPath = AppDomain.CurrentDomain.BaseDirectory + "\\settings.json";
+            string settingsPath = AppContext.BaseDirectory + "\\settings.json";
             if (File.Exists(settingsPath))
             {
                 settings = JsonSerializer.Deserialize<settings>(File.ReadAllText(settingsPath));
@@ -63,7 +63,7 @@ namespace WindowsShutdownHelper.functions
         {
             try
             {
-                string langDir = AppDomain.CurrentDomain.BaseDirectory + "\\lang";
+                string langDir = AppContext.BaseDirectory + "\\lang";
                 Directory.CreateDirectory(langDir);
 
                 WriteLangIfMissing(langDir, "en", lang_en.lang_english());

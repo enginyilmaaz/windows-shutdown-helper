@@ -39,7 +39,7 @@ namespace WindowsShutdownHelper
             var env = await WebViewEnvironmentProvider.GetAsync();
             await webView.EnsureCoreWebView2Async(env);
 
-            string wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+            string wwwrootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
             webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "app.local", wwwrootPath,
                 CoreWebView2HostResourceAccessKind.Allow);
@@ -351,7 +351,7 @@ namespace WindowsShutdownHelper
 
         private void WriteActionList()
         {
-            jsonWriter.WriteJson(AppDomain.CurrentDomain.BaseDirectory + "\\actionList.json", true,
+            jsonWriter.WriteJson(AppContext.BaseDirectory + "\\actionList.json", true,
                 mainForm.actionList.ToList());
 
             // Refresh in this window
@@ -379,7 +379,7 @@ namespace WindowsShutdownHelper
             };
 
             string currentLang = LoadSettings().language;
-            jsonWriter.WriteJson(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json", true, newSettings);
+            jsonWriter.WriteJson(AppContext.BaseDirectory + "\\settings.json", true, newSettings);
 
             if (newSettings.startWithWindows)
                 startWithWindows.AddStartup(mainForm.language.settingsForm_addStartupAppName ?? "Windows Shutdown Helper");
@@ -415,7 +415,7 @@ namespace WindowsShutdownHelper
 
         private void HandleLoadLogs()
         {
-            string logPath = AppDomain.CurrentDomain.BaseDirectory + "\\logs.json";
+            string logPath = AppContext.BaseDirectory + "\\logs.json";
             if (File.Exists(logPath))
             {
                 var rawLogs = JsonSerializer.Deserialize<List<logSystem>>(File.ReadAllText(logPath));
@@ -436,7 +436,7 @@ namespace WindowsShutdownHelper
 
         private void HandleClearLogs()
         {
-            string logPath = AppDomain.CurrentDomain.BaseDirectory + "\\logs.json";
+            string logPath = AppContext.BaseDirectory + "\\logs.json";
             if (File.Exists(logPath)) File.Delete(logPath);
 
             PostMessage("showToast", new
@@ -465,10 +465,10 @@ namespace WindowsShutdownHelper
 
         private settings LoadSettings()
         {
-            if (File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"))
+            if (File.Exists(AppContext.BaseDirectory + "\\settings.json"))
             {
                 return JsonSerializer.Deserialize<settings>(
-                    File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"));
+                    File.ReadAllText(AppContext.BaseDirectory + "\\settings.json"));
             }
             return config.settingsINI.defaulSettingFile();
         }

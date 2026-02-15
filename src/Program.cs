@@ -36,9 +36,9 @@ namespace WindowsShutdownHelper
         [STAThread]
         private static void Main()
         {
-            if (!File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"))
+            if (!File.Exists(AppContext.BaseDirectory + "\\settings.json"))
             {
-                jsonWriter.WriteJson(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json", true,
+                jsonWriter.WriteJson(AppContext.BaseDirectory + "\\settings.json", true,
                     settingsINI.defaulSettingFile());
             }
 

@@ -63,7 +63,7 @@ namespace WindowsShutdownHelper
             var env = await WebViewEnvironmentProvider.GetAsync();
             await webView.EnsureCoreWebView2Async(env);
 
-            string wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+            string wwwrootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
             webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "app.local", wwwrootPath,
                 CoreWebView2HostResourceAccessKind.Allow);
@@ -160,7 +160,7 @@ namespace WindowsShutdownHelper
                     timer.Stop();
                     mainForm.actionList.Remove(action);
                     mainForm.isDeletedFromNotifier = true;
-                    jsonWriter.WriteJson(AppDomain.CurrentDomain.BaseDirectory + "\\actionList.json", true,
+                    jsonWriter.WriteJson(AppContext.BaseDirectory + "\\actionList.json", true,
                         mainForm.actionList);
                     Close();
                     break;
