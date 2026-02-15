@@ -68,7 +68,7 @@ namespace WindowsShutdownHelper
             this.settingsToolStripMenuItem.Click += new System.EventHandler(this.settingsToolStripMenuItem_Click);
 
             // showTheLogsToolStripMenuItem
-            this.showTheLogsToolStripMenuItem.Image = ((System.Drawing.Image)(resources.GetObject("showTheLogsToolStripMenuItem.Image")));
+            this.showTheLogsToolStripMenuItem.Image = global::WindowsShutdownHelper.Properties.Resources.logs;
             this.showTheLogsToolStripMenuItem.Name = "showTheLogsToolStripMenuItem";
             this.showTheLogsToolStripMenuItem.Size = new System.Drawing.Size(162, 22);
             this.showTheLogsToolStripMenuItem.Text = "Show logs";

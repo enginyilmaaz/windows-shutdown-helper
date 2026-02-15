@@ -22,6 +22,7 @@ namespace WindowsShutdownHelper
         public static int runInTaskbarCounter;
 
         private bool _webViewReady;
+        private settings _cachedSettings;
 
         public mainForm()
         {
@@ -47,6 +48,7 @@ namespace WindowsShutdownHelper
 
         public void deleteExpriedAction()
         {
+            bool changed = false;
             foreach (ActionModel action in actionList.ToList())
             {
                 if (action.triggerType == config.triggerTypes.fromNow)
@@ -55,15 +57,18 @@ namespace WindowsShutdownHelper
                     if (DateTime.Now > actionDate)
                     {
                         actionList.Remove(action);
-                        writeJsonToActionList();
+                        changed = true;
                     }
                 }
             }
+            if (changed) writeJsonToActionList();
         }
 
         private async void mainForm_Load(object sender, EventArgs e)
         {
-            Logger.doLog(config.actionTypes.appStarted);
+            // Initialize WebView2 first - this is the slowest operation
+            await InitializeWebView();
+
             Text = language.main_FormName;
             notifyIcon_main.Text = language.main_FormName + " " + language.notifyIcon_main;
 
@@ -93,21 +98,22 @@ namespace WindowsShutdownHelper
                 language.contextMenuStrip_notifyIcon_showLogs;
 
             // Apply modern tray menu renderer based on theme
-            var currentSettings = LoadSettings();
-            bool isDark = DetermineIfDark(currentSettings.theme);
+            _cachedSettings = LoadSettings();
+            bool isDark = DetermineIfDark(_cachedSettings.theme);
             contextMenuStrip_notifyIcon.Renderer = new WindowsShutdownHelper.functions.ModernMenuRenderer(isDark);
             contextMenuStrip_notifyIcon.Font = new System.Drawing.Font("Segoe UI", 9.5f, System.Drawing.FontStyle.Regular);
             BackColor = isDark
                 ? System.Drawing.Color.FromArgb(26, 27, 46)
                 : System.Drawing.Color.FromArgb(240, 242, 245);
 
-            // Initialize WebView2
-            await InitializeWebView();
+            // Log app started in background
+            System.Threading.Tasks.Task.Run(() => Logger.doLog(config.actionTypes.appStarted, _cachedSettings));
         }
 
         private async System.Threading.Tasks.Task InitializeWebView()
         {
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.GetTempPath());
+            string userDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data");
+            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
             await webView.EnsureCoreWebView2Async(env);
 
             string wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
@@ -150,7 +156,7 @@ namespace WindowsShutdownHelper
             {
                 language = langDict,
                 actions = displayActions,
-                settings = LoadSettings()
+                settings = _cachedSettings ?? LoadSettings()
             };
 
             PostMessage("init", initData);

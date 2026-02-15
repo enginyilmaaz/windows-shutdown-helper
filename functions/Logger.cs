@@ -7,18 +7,22 @@ namespace WindowsShutdownHelper.functions
 {
     public class Logger
     {
-        public static void doLog(string actionType)
+        public static void doLog(string actionType, settings cachedSettings = null)
         {
-            settings settings = new settings();
+            settings settings = cachedSettings;
 
-            if (File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"))
+            if (settings == null)
             {
-                settings = JsonSerializer.Deserialize<settings>(
-                    File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"));
-            }
-            else
-            {
-                settings.logsEnabled = true;
+                if (File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"))
+                {
+                    settings = JsonSerializer.Deserialize<settings>(
+                        File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "\\settings.json"));
+                }
+                else
+                {
+                    settings = new settings();
+                    settings.logsEnabled = true;
+                }
             }
 
             if (settings.logsEnabled)
