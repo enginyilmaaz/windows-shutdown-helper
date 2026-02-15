@@ -120,6 +120,9 @@ namespace WindowsShutdownHelper.lang
                 settingsForm_theme_light = "Светлая",
                 settingsForm_theme_system = "Системная",
                 about_menuItem = "О программе",
+                about_label_version = "Версия",
+                about_label_buildId = "ID сборки",
+                about_label_author = "Автор",
 
             };
             return lang;

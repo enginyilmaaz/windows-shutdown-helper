@@ -121,6 +121,9 @@
                 settingsForm_theme_light = "Açık",
                 settingsForm_theme_system = "Sistem Varsayılanı",
                 about_menuItem = "Hakkında",
+                about_label_version = "Sürüm",
+                about_label_buildId = "Yapı Kimliği",
+                about_label_author = "Geliştirici",
 
             };
 

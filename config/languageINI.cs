@@ -132,6 +132,9 @@
         public string settingsForm_theme_system { get; set; }
 
         public string about_menuItem { get; set; }
+        public string about_label_version { get; set; }
+        public string about_label_buildId { get; set; }
+        public string about_label_author { get; set; }
 
     }
 }

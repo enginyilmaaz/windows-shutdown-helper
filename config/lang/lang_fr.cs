@@ -120,6 +120,9 @@ namespace WindowsShutdownHelper.lang
                 settingsForm_theme_light = "Clair",
                 settingsForm_theme_system = "Système par défaut",
                 about_menuItem = "À propos",
+                about_label_version = "Version",
+                about_label_buildId = "ID de build",
+                about_label_author = "Auteur",
 
             };
             return lang;

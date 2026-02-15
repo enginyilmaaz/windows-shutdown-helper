@@ -120,6 +120,9 @@
                 settingsForm_theme_light = "Light",
                 settingsForm_theme_system = "System Default",
                 about_menuItem = "About",
+                about_label_version = "Version",
+                about_label_buildId = "Build ID",
+                about_label_author = "Author",
 
             };
             return lang;
