@@ -14,6 +14,8 @@ namespace WindowsShutdownHelper
     {
         private readonly string _pageName;
         private bool _webViewReady;
+        private bool _webViewInitStarted;
+        private bool _isPrewarmedHidden;
         private bool _allowClose;
         private Panel _loadingOverlay;
         private Label _loadingLabel;
@@ -30,8 +32,23 @@ namespace WindowsShutdownHelper
 
         private async void SubWindow_Load(object sender, EventArgs e)
         {
-            ShowLoadingOverlay();
-            await InitializeWebView();
+            try
+            {
+                await EnsureWebViewInitializedAsync();
+            }
+            catch (Exception ex)
+            {
+                if (ShowInTaskbar || Opacity > 0)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Arayuz acilamadi.\r\n\r\nDetay: " + ex.Message,
+                        mainForm.language?.messageTitle_error ?? "Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+                Close();
+            }
         }
 
         private async System.Threading.Tasks.Task InitializeWebView()
@@ -52,6 +69,14 @@ namespace WindowsShutdownHelper
             webView.CoreWebView2.DOMContentLoaded += OnDomContentLoaded;
 
             webView.CoreWebView2.Navigate("https://app.local/subwindow.html?page=" + _pageName);
+        }
+
+        private async System.Threading.Tasks.Task EnsureWebViewInitializedAsync()
+        {
+            if (_webViewReady || _webViewInitStarted) return;
+            _webViewInitStarted = true;
+            ShowLoadingOverlay();
+            await InitializeWebView();
         }
 
         private void OnDomContentLoaded(object sender, CoreWebView2DOMContentLoadedEventArgs e)
@@ -114,6 +139,53 @@ namespace WindowsShutdownHelper
             _loadingDelayTimer?.Stop();
             _loadingOverlay.Visible = false;
         }
+
+        // Warm up WebView while keeping window hidden to reduce first-open delay.
+        public void PrewarmInBackground()
+        {
+            if (_webViewReady || _webViewInitStarted || IsDisposed) return;
+
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            Location = new System.Drawing.Point(-32000, -32000);
+            Opacity = 0;
+            _isPrewarmedHidden = true;
+
+            Show();
+            Hide();
+        }
+
+        public void ShowForUser()
+        {
+            if (IsDisposed) return;
+
+            ShowInTaskbar = true;
+            Opacity = 1;
+
+            if (_isPrewarmedHidden)
+            {
+                var area = Screen.PrimaryScreen.WorkingArea;
+                Location = new System.Drawing.Point(
+                    area.Left + Math.Max(0, (area.Width - Width) / 2),
+                    area.Top + Math.Max(0, (area.Height - Height) / 2));
+                _isPrewarmedHidden = false;
+            }
+
+            if (!Visible)
+            {
+                Show();
+            }
+
+            if (WindowState == FormWindowState.Minimized)
+            {
+                WindowState = FormWindowState.Normal;
+            }
+
+            BringToFront();
+            Activate();
+        }
+
+        protected override bool ShowWithoutActivation => true;
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {

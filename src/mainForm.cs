@@ -34,6 +34,9 @@ namespace WindowsShutdownHelper
         private Label _loadingLabel;
         private Timer _loadingDelayTimer;
         private const int LoadingOverlayDelayMs = 350;
+        private readonly string[] _subWindowPrewarmPages = { "settings", "logs", "about" };
+        private Timer _subWindowPrewarmTimer;
+        private int _subWindowPrewarmIndex;
 
         public mainForm()
         {
@@ -98,7 +101,11 @@ namespace WindowsShutdownHelper
 
             Text = language.main_FormName;
             notifyIcon_main.Text = language.main_FormName + " " + language.notifyIcon_main;
+            BeginInvoke(new Action(InitializeRuntimeState));
+        }
 
+        private void InitializeRuntimeState()
+        {
             detectScreen.manuelLockingActionLogger();
             if (File.Exists(AppContext.BaseDirectory + "\\actionList.json"))
             {
@@ -228,6 +235,48 @@ namespace WindowsShutdownHelper
             _initSent = true;
             SendInitData();
             HideLoadingOverlay();
+            StartSubWindowPrewarm();
+        }
+
+        private void StartSubWindowPrewarm()
+        {
+            if (_subWindowPrewarmTimer != null) return;
+
+            _subWindowPrewarmTimer = new Timer
+            {
+                Interval = 900
+            };
+            _subWindowPrewarmTimer.Tick += OnSubWindowPrewarmTick;
+            _subWindowPrewarmTimer.Start();
+        }
+
+        private void StopSubWindowPrewarm()
+        {
+            if (_subWindowPrewarmTimer == null) return;
+
+            _subWindowPrewarmTimer.Stop();
+            _subWindowPrewarmTimer.Tick -= OnSubWindowPrewarmTick;
+            _subWindowPrewarmTimer.Dispose();
+            _subWindowPrewarmTimer = null;
+        }
+
+        private void OnSubWindowPrewarmTick(object sender, EventArgs e)
+        {
+            if (isApplicationExiting || IsDisposed)
+            {
+                StopSubWindowPrewarm();
+                return;
+            }
+
+            if (_subWindowPrewarmIndex >= _subWindowPrewarmPages.Length)
+            {
+                StopSubWindowPrewarm();
+                return;
+            }
+
+            string pageName = _subWindowPrewarmPages[_subWindowPrewarmIndex++];
+            var win = GetOrCreateSubWindow(pageName);
+            win.PrewarmInBackground();
         }
 
         private void SendInitData()
@@ -385,6 +434,7 @@ namespace WindowsShutdownHelper
                     break;
                 case "exitApp":
                     isApplicationExiting = true;
+                    StopSubWindowPrewarm();
                     CloseAllSubWindows();
                     Logger.doLog(config.actionTypes.appTerminated);
                     Application.ExitThread();
@@ -708,36 +758,36 @@ namespace WindowsShutdownHelper
 
         public void OpenSubWindow(string pageName)
         {
-            // If already open, focus it
-            if (_subWindows.ContainsKey(pageName) && !_subWindows[pageName].IsDisposed)
-            {
-                _subWindows[pageName].Show();
-                _subWindows[pageName].Focus();
-                return;
-            }
+            var win = GetOrCreateSubWindow(pageName);
+            win.ShowForUser();
+            win.Focus();
+        }
 
-            // Determine title
-            string title;
+        private string GetSubWindowTitle(string pageName)
+        {
             switch (pageName)
             {
                 case "main":
-                    title = language.main_groupbox_newAction ?? "Actions";
-                    break;
+                    return language.main_groupbox_newAction ?? "Actions";
                 case "settings":
-                    title = language.settingsForm_Name ?? "Settings";
-                    break;
+                    return language.settingsForm_Name ?? "Settings";
                 case "logs":
-                    title = language.logViewerForm_Name ?? "Logs";
-                    break;
+                    return language.logViewerForm_Name ?? "Logs";
                 case "about":
-                    title = language.about_menuItem ?? "About";
-                    break;
+                    return language.about_menuItem ?? "About";
                 default:
-                    title = language.main_FormName ?? "Windows Shutdown Helper";
-                    break;
+                    return language.main_FormName ?? "Windows Shutdown Helper";
+            }
+        }
+
+        private SubWindow GetOrCreateSubWindow(string pageName)
+        {
+            if (_subWindows.ContainsKey(pageName) && !_subWindows[pageName].IsDisposed)
+            {
+                return _subWindows[pageName];
             }
 
-            var win = new SubWindow(pageName, title);
+            var win = new SubWindow(pageName, GetSubWindowTitle(pageName));
             _subWindows[pageName] = win;
 
             win.FormClosed += (s, args) =>
@@ -745,8 +795,7 @@ namespace WindowsShutdownHelper
                 _subWindows.Remove(pageName);
             };
 
-            win.Show();
-            win.Focus();
+            return win;
         }
 
         // =============== Timer & Action Execution ===============
@@ -876,6 +925,8 @@ namespace WindowsShutdownHelper
 
         private void mainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            StopSubWindowPrewarm();
+
             if (File.Exists(AppContext.BaseDirectory + "\\settings.json"))
             {
                 settings = JsonSerializer.Deserialize<Settings>(
@@ -903,6 +954,7 @@ namespace WindowsShutdownHelper
         private void exitTheProgramToolStripMenuItem_Click(object sender, EventArgs e)
         {
             isApplicationExiting = true;
+            StopSubWindowPrewarm();
             CloseAllSubWindows();
             Logger.doLog(config.actionTypes.appTerminated);
             Application.ExitThread();

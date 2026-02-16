@@ -8,7 +8,8 @@
     <AssemblyName>Windows Shutdown Helper</AssemblyName>
     <ApplicationIcon>src\setup.ico</ApplicationIcon>
     <StartupObject>WindowsShutdownHelper.Program</StartupObject>
-    <PublishSingleFile>true</PublishSingleFile>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
     <SelfContained>false</SelfContained>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>

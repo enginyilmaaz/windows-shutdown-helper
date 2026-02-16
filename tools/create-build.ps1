@@ -32,6 +32,7 @@ $ErrorActionPreference = "Stop"
 $toolsDir     = $PSScriptRoot
 $projectRoot  = Split-Path $toolsDir -Parent
 $solutionFile = Join-Path $projectRoot "Windows Shutdown Helper.sln"
+$projectFile  = Join-Path $projectRoot "Windows Shutdown Helper.csproj"
 $localDotnet  = Join-Path $toolsDir "dotnet"
 
 if ($IsWindows -or $env:OS -eq "Windows_NT") {
@@ -138,10 +139,20 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# --- Step 6: Publish (Installer Output) ---
+Write-Step "Publishing win-x64 (ReadyToRun)"
+& $dotnetCmd publish "$projectFile" -c $Configuration -r win-x64 --self-contained false --no-restore -p:PublishReadyToRun=true -p:PublishSingleFile=false
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "  [FAIL] Publish failed!" -ForegroundColor Red
+    exit 1
+}
+
 # --- Done ---
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  BUILD SUCCEEDED" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
-Write-Host "  Output: bin/$Configuration/net8.0-windows/" -ForegroundColor White
+Write-Host "  Build Output  : bin/$Configuration/net8.0-windows/" -ForegroundColor White
+Write-Host "  Publish Output: bin/$Configuration/net8.0-windows/win-x64/publish/" -ForegroundColor White
 Write-Host ""
