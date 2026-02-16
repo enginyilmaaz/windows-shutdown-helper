@@ -36,21 +36,32 @@ namespace WindowsShutdownHelper
         [STAThread]
         private static void Main()
         {
-            if (!File.Exists(AppContext.BaseDirectory + "\\settings.json"))
+            try
             {
-                jsonWriter.WriteJson(AppContext.BaseDirectory + "\\settings.json", true,
-                    settingsINI.defaulSettingFile());
-            }
+                if (!File.Exists(AppContext.BaseDirectory + "\\settings.json"))
+                {
+                    jsonWriter.WriteJson(AppContext.BaseDirectory + "\\settings.json", true,
+                        settingsINI.defaulSettingFile());
+                }
 
-            if (PriorProcess() != null)
+                if (PriorProcess() != null)
+                {
+                    return;
+                }
+
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                WebViewEnvironmentProvider.Prewarm();
+                Application.Run(new mainForm());
+            }
+            catch (Exception ex)
             {
-                return;
+                MessageBox.Show(
+                    ex.ToString(),
+                    "Windows Shutdown Helper - Startup Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
-
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            WebViewEnvironmentProvider.Prewarm();
-            Application.Run(new mainForm());
         }
     }
 }
