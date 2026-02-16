@@ -944,8 +944,18 @@ namespace WindowsShutdownHelper
                 return false;
             }
 
+            if (parsed == 0)
+            {
+                return false;
+            }
+
             if (string.IsNullOrEmpty(action.valueUnit))
             {
+                if (parsed > uint.MaxValue / 60)
+                {
+                    return false;
+                }
+
                 seconds = parsed * 60;
             }
             else

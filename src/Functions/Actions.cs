@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace WindowsShutdownHelper.functions
 {
@@ -133,25 +134,81 @@ namespace WindowsShutdownHelper.functions
         {
             public enum MonitorState
             {
-               
                 OFF = 2
             }
 
-            private static readonly int SC_MONITORPOWER = 0xF170;
-            private static readonly int WM_SYSCOMMAND = 0x0112;
-            private static readonly int HWND_BROADCAST = 0xFFFF;
-
-
-            [DllImport("user32.dll")]
-            public static extern IntPtr SendMessage(int hWnd, int Msg, int wParam, int lParam);
-
-            public static void SetMonitorState(MonitorState state)
+            [Flags]
+            private enum SendMessageTimeoutFlags : uint
             {
-                SendMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, (int)MonitorState.OFF);
+                AbortIfHung = 0x0002
+            }
+
+            private const uint WM_SYSCOMMAND = 0x0112;
+            private static readonly IntPtr SC_MONITORPOWER = new IntPtr(0xF170);
+            private static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
+            private const uint MonitorPowerCallTimeoutMs = 500;
+            private const long MonitorOffCooldownMs = 4000;
+            private static long _lastMonitorOffTick = -MonitorOffCooldownMs;
+
+            [DllImport("user32.dll", SetLastError = true)]
+            private static extern IntPtr SendMessageTimeout(
+                IntPtr hWnd,
+                uint msg,
+                IntPtr wParam,
+                IntPtr lParam,
+                SendMessageTimeoutFlags fuFlags,
+                uint uTimeout,
+                out IntPtr lpdwResult);
+
+            [DllImport("user32.dll", SetLastError = true)]
+            private static extern bool PostMessage(
+                IntPtr hWnd,
+                uint msg,
+                IntPtr wParam,
+                IntPtr lParam);
+
+            public static bool SetMonitorState(MonitorState state)
+            {
+                IntPtr lResult;
+                IntPtr sendResult = SendMessageTimeout(
+                    HWND_BROADCAST,
+                    WM_SYSCOMMAND,
+                    SC_MONITORPOWER,
+                    new IntPtr((int)state),
+                    SendMessageTimeoutFlags.AbortIfHung,
+                    MonitorPowerCallTimeoutMs,
+                    out lResult);
+
+                if (sendResult != IntPtr.Zero)
+                {
+                    return true;
+                }
+
+                // Fallback for systems where broadcast send blocks or fails.
+                return PostMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, new IntPtr((int)state));
+            }
+
+            private static bool IsMonitorOffInCooldown()
+            {
+                long nowTick = Environment.TickCount64;
+                long lastTick = Interlocked.Read(ref _lastMonitorOffTick);
+
+                if (nowTick - lastTick < MonitorOffCooldownMs)
+                {
+                    return true;
+                }
+
+                Interlocked.Exchange(ref _lastMonitorOffTick, nowTick);
+                return false;
             }
 
             public static void Monitor()
             {
+                if (IsMonitorOffInCooldown())
+                {
+                    return;
+                }
+
                 Logger.doLog(config.actionTypes.turnOffMonitor);
                 SetMonitorState(MonitorState.OFF);
             }

@@ -144,7 +144,16 @@ Write-Step "Publishing win-x64 (ReadyToRun)"
 & $dotnetCmd publish "$projectFile" -c $Configuration -r win-x64 --self-contained false --no-restore -p:PublishReadyToRun=true -p:PublishSingleFile=false
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "  [FAIL] Publish failed!" -ForegroundColor Red
+    Write-Host "  [FAIL] Publish (win-x64) failed!" -ForegroundColor Red
+    exit 1
+}
+
+# --- Step 7: Publish x86 (Win10 legacy compatibility) ---
+Write-Step "Publishing win-x86 (ReadyToRun)"
+& $dotnetCmd publish "$projectFile" -c $Configuration -r win-x86 --self-contained false --no-restore -p:PublishReadyToRun=true -p:PublishSingleFile=false
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "  [FAIL] Publish (win-x86) failed!" -ForegroundColor Red
     exit 1
 }
 
@@ -155,4 +164,5 @@ Write-Host "  BUILD SUCCEEDED" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  Build Output  : bin/$Configuration/net8.0-windows/" -ForegroundColor White
 Write-Host "  Publish Output: bin/$Configuration/net8.0-windows/win-x64/publish/" -ForegroundColor White
+Write-Host "  Publish Output: bin/$Configuration/net8.0-windows/win-x86/publish/" -ForegroundColor White
 Write-Host ""

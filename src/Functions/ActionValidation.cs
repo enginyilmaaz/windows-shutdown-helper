@@ -32,7 +32,8 @@ namespace WindowsShutdownHelper.functions
 
             if (!TryGetActionOrderValue(newAction, out long newActionOrderValue))
             {
-                return true;
+                errorMessage = language?.messageContent_actionChoose ?? "Invalid action value.";
+                return false;
             }
 
             foreach (ActionModel existingAction in existingActions)
@@ -200,8 +201,18 @@ namespace WindowsShutdownHelper.functions
                 return false;
             }
 
+            if (parsed <= 0)
+            {
+                return false;
+            }
+
             if (string.IsNullOrEmpty(action.valueUnit))
             {
+                if (parsed > int.MaxValue / 60)
+                {
+                    return false;
+                }
+
                 seconds = parsed * 60;
             }
             else
