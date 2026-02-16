@@ -9,6 +9,7 @@ const App = {
         main: { scriptPath: 'Js/Pages/Main.js', globalName: 'MainPage' },
         settings: { scriptPath: 'Js/Pages/Settings.js', globalName: 'SettingsPage' },
         logs: { scriptPath: 'Js/Pages/Logs.js', globalName: 'LogsPage' },
+        help: { scriptPath: 'Js/Pages/Help.js', globalName: 'HelpPage' },
         about: { scriptPath: 'Js/Pages/About.js', globalName: 'AboutPage' }
     },
 
@@ -289,6 +290,9 @@ const App = {
 
         var miLogs = document.getElementById('mi-logs-text');
         if (miLogs) miLogs.textContent = L('LogViewerFormName') || 'Logs';
+
+        var miHelp = document.getElementById('mi-help-text');
+        if (miHelp) miHelp.textContent = L('HelpMenuItem') || 'Help';
 
         var miExit = document.getElementById('mi-exit-text');
         if (miExit) miExit.textContent = L('ContextMenuStripNotifyIconExitProgram') || 'Exit';

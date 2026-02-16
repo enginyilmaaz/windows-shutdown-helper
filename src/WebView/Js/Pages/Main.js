@@ -531,6 +531,7 @@ window.MainPage = {
         '<div class="context-menu" id="ctx-menu">' +
             '<div class="context-menu-item" id="ctx-delete">' + L('ContextMenuStripMainGridDeleteSelectedAction') + '</div>' +
             '<div class="context-menu-item danger" id="ctx-clear">' + L('ContextMenuStripMainGridDeleteAllAction') + '</div>' +
+            '<div class="context-menu-item" id="ctx-help">' + L('ContextMenuStripMainGridOpenHelp') + '</div>' +
         '</div>';
     },
 
@@ -647,6 +648,7 @@ window.MainPage = {
 
         var ctxDelete = document.getElementById('ctx-delete');
         var ctxClear = document.getElementById('ctx-clear');
+        var ctxHelp = document.getElementById('ctx-help');
 
         if (ctxDelete) {
             var onCtxDelete = function () {
@@ -667,6 +669,17 @@ window.MainPage = {
             ctxClear.addEventListener('click', onCtxClear);
             self._registerCleanup(function () {
                 ctxClear.removeEventListener('click', onCtxClear);
+            });
+        }
+
+        if (ctxHelp) {
+            var onCtxHelp = function () {
+                self._hideContextMenu();
+                Bridge.send('openWindow', { page: 'help' });
+            };
+            ctxHelp.addEventListener('click', onCtxHelp);
+            self._registerCleanup(function () {
+                ctxHelp.removeEventListener('click', onCtxHelp);
             });
         }
 

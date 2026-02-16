@@ -55,9 +55,11 @@
                 ContextMenuStripMainGridDeleteSelectedAction = "Seçili görevi sil",
                 ContextMenuStripMainGridEditSelectedAction = "Seçili görevi düzenle",
                 ContextMenuStripMainGridDeleteAllAction = "Tüm görevleri sil",
+                ContextMenuStripMainGridOpenHelp = "Tetikleyici kullanım yardımı",
                 ContextMenuStripNotifyIconAddNewAction = "Yeni Görev Oluştur",
                 ContextMenuStripNotifyIconShowSettings = "Ayarlar",
                 ContextMenuStripNotifyIconShowLogs = "Kayıtları Göster",
+                ContextMenuStripNotifyIconShowHelp = "Yardım",
                 ContextMenuStripNotifyIconExitProgram = "Programdan çık",
                 LabelFirstlyChooseATrigger = "Önce bir tetikleyici seçin",
                 ToolTipShowLogs = "Kayıt Görüntüleyici penceresini açar",
@@ -129,6 +131,7 @@
                 AboutLabelVersion = "Sürüm",
                 AboutLabelBuildId = "Yapı Kimliği",
                 AboutLabelAuthor = "Geliştirici",
+                HelpMenuItem = "Yardım",
                 CommonLoading = "Yükleniyor...",
 
                 // Toolbar
@@ -166,7 +169,7 @@
                 MainButtonEditAction = "Güncelle",
 
                 // Bluetooth
-                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth cihaz erişilemez",
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth Kilidi",
                 BluetoothScanButton = "Cihaz Tara",
                 BluetoothScanning = "Taranıyor...",
                 BluetoothNoDeviceFound = "Cihaz bulunamadı",

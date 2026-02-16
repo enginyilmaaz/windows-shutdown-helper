@@ -26,6 +26,7 @@ namespace WindowsShutdownHelper
             this.addNewActionToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.showTheLogsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.helpToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.exitTheProgramToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -45,13 +46,14 @@ namespace WindowsShutdownHelper
                 this.addNewActionToolStripMenuItem,
                 this.settingsToolStripMenuItem,
                 this.showTheLogsToolStripMenuItem,
+                this.helpToolStripMenuItem,
                 this.aboutToolStripMenuItem,
                 this.toolStripSeparator1,
                 this.exitTheProgramToolStripMenuItem
             });
             this.ContextMenuStripNotifyIcon.Name = "ContextMenuStripNotifyIcon";
             this.ContextMenuStripNotifyIcon.ImageScalingSize = new System.Drawing.Size(24, 24);
-            this.ContextMenuStripNotifyIcon.Size = new System.Drawing.Size(200, 120);
+            this.ContextMenuStripNotifyIcon.Size = new System.Drawing.Size(200, 156);
 
             // addNewActionToolStripMenuItem
             this.addNewActionToolStripMenuItem.Image = global::WindowsShutdownHelper.Properties.Resources.add;
@@ -73,6 +75,13 @@ namespace WindowsShutdownHelper
             this.showTheLogsToolStripMenuItem.Size = new System.Drawing.Size(200, 36);
             this.showTheLogsToolStripMenuItem.Text = "Show logs";
             this.showTheLogsToolStripMenuItem.Click += new System.EventHandler(this.showTheLogsToolStripMenuItem_Click);
+
+            // helpToolStripMenuItem
+            this.helpToolStripMenuItem.Image = global::WindowsShutdownHelper.Properties.Resources.info;
+            this.helpToolStripMenuItem.Name = "helpToolStripMenuItem";
+            this.helpToolStripMenuItem.Size = new System.Drawing.Size(200, 36);
+            this.helpToolStripMenuItem.Text = "Help";
+            this.helpToolStripMenuItem.Click += new System.EventHandler(this.helpToolStripMenuItem_Click);
 
             // aboutToolStripMenuItem
             this.aboutToolStripMenuItem.Image = global::WindowsShutdownHelper.Properties.Resources.about;
@@ -123,6 +132,7 @@ namespace WindowsShutdownHelper
         private System.Windows.Forms.ToolStripMenuItem addNewActionToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem showTheLogsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem helpToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripMenuItem exitTheProgramToolStripMenuItem;

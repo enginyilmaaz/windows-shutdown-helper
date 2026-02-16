@@ -10,6 +10,7 @@
         main: { scriptPath: 'Js/Pages/Main.js', globalName: 'MainPage' },
         settings: { scriptPath: 'Js/Pages/Settings.js', globalName: 'SettingsPage' },
         logs: { scriptPath: 'Js/Pages/Logs.js', globalName: 'LogsPage' },
+        help: { scriptPath: 'Js/Pages/Help.js', globalName: 'HelpPage' },
         about: { scriptPath: 'Js/Pages/About.js', globalName: 'AboutPage' }
     };
 
@@ -90,6 +91,8 @@
             title.textContent = L('SettingsFormName') || 'Settings';
         } else if (pageName === 'logs') {
             title.textContent = L('LogViewerFormName') || 'Logs';
+        } else if (pageName === 'help') {
+            title.textContent = L('HelpMenuItem') || 'Help';
         } else if (pageName === 'about') {
             title.textContent = L('AboutMenuItem') || 'About';
         } else {

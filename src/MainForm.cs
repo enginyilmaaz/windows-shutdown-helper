@@ -35,9 +35,10 @@ namespace WindowsShutdownHelper
         private Label _loadingLabel;
         private Timer _loadingDelayTimer;
         private const int LoadingOverlayDelayMs = 350;
-        private readonly string[] _subWindowPrewarmPages = { "settings", "logs", "about" };
+        private readonly string[] _subWindowPrewarmPages = { "settings", "logs", "help", "about" };
         private readonly HashSet<string> _executedIdleActionKeys = new HashSet<string>();
-        private readonly HashSet<string> _executedBluetoothActionKeys = new HashSet<string>();
+        private readonly Dictionary<string, bool> _bluetoothReachabilityByActionKey =
+            new Dictionary<string, bool>();
         private readonly Dictionary<string, DateTime> _certainTimeLastExecutionDates = new Dictionary<string, DateTime>();
         private bool _subWindowPrewarmStarted;
         private bool _startupErrorShown;
@@ -174,6 +175,8 @@ namespace WindowsShutdownHelper
                     Language.ContextMenuStripNotifyIconShowSettings;
                 ContextMenuStripNotifyIcon.Items[(int)EnumCmStripNotifyIcon.ShowLogs].Text =
                     Language.ContextMenuStripNotifyIconShowLogs;
+                ContextMenuStripNotifyIcon.Items[(int)EnumCmStripNotifyIcon.Help].Text =
+                    Language.ContextMenuStripNotifyIconShowHelp ?? "Help";
                 ContextMenuStripNotifyIcon.Items[(int)EnumCmStripNotifyIcon.About].Text =
                     Language.AboutMenuItem ?? "About";
 
@@ -1122,7 +1125,7 @@ namespace WindowsShutdownHelper
             else if (!hasBluetoothTrigger && BluetoothScanner.IsMonitoring)
             {
                 BluetoothScanner.StopMonitoring();
-                _executedBluetoothActionKeys.Clear();
+                _bluetoothReachabilityByActionKey.Clear();
             }
         }
 
@@ -1147,7 +1150,13 @@ namespace WindowsShutdownHelper
         {
             var validKeys = new HashSet<string>(ActionList.Select(BuildActionExecutionKey));
             _executedIdleActionKeys.RemoveWhere(key => !validKeys.Contains(key));
-            _executedBluetoothActionKeys.RemoveWhere(key => !validKeys.Contains(key));
+            foreach (string key in _bluetoothReachabilityByActionKey.Keys.ToList())
+            {
+                if (!validKeys.Contains(key))
+                {
+                    _bluetoothReachabilityByActionKey.Remove(key);
+                }
+            }
 
             foreach (string key in _certainTimeLastExecutionDates.Keys.ToList())
             {
@@ -1255,6 +1264,8 @@ namespace WindowsShutdownHelper
                     return Language.SettingsFormName ?? "Settings";
                 case "logs":
                     return Language.LogViewerFormName ?? "Logs";
+                case "help":
+                    return Language.HelpMenuItem ?? "Help";
                 case "about":
                     return Language.AboutMenuItem ?? "About";
                 default:
@@ -1347,17 +1358,23 @@ namespace WindowsShutdownHelper
 
                 int threshold = (_cachedSettings?.BluetoothThresholdSeconds > 0) ? _cachedSettings.BluetoothThresholdSeconds : 5;
                 bool reachable = BluetoothScanner.IsDeviceReachable(state.BluetoothAddress, threshold, now);
+                bool hasEverBeenSeen = BluetoothScanner.HasDeviceEverBeenSeen(state.BluetoothAddress);
+                bool wasReachable = _bluetoothReachabilityByActionKey.TryGetValue(actionKey, out bool previousReachable)
+                    && previousReachable;
 
                 if (reachable)
                 {
-                    _executedBluetoothActionKeys.Remove(actionKey);
+                    _bluetoothReachabilityByActionKey[actionKey] = true;
                 }
-                else if (BluetoothScanner.HasDeviceEverBeenSeen(state.BluetoothAddress) &&
-                         !_executedBluetoothActionKeys.Contains(actionKey))
+                else if (hasEverBeenSeen && wasReachable)
                 {
-                    _executedBluetoothActionKeys.Add(actionKey);
+                    _bluetoothReachabilityByActionKey[actionKey] = false;
                     Actions.DoActionByTypes(action);
                     result |= ActionExecutionResult.Executed;
+                }
+                else if (!_bluetoothReachabilityByActionKey.ContainsKey(actionKey))
+                {
+                    _bluetoothReachabilityByActionKey[actionKey] = false;
                 }
             }
 
@@ -1616,6 +1633,11 @@ namespace WindowsShutdownHelper
         private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
             OpenSubWindow("about");
+        }
+
+        private void helpToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenSubWindow("help");
         }
 
         private void showTheLogsToolStripMenuItem_Click(object sender, EventArgs e)

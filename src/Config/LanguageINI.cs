@@ -64,9 +64,11 @@
         public string ContextMenuStripMainGridDeleteSelectedAction { get; set; }
         public string ContextMenuStripMainGridEditSelectedAction { get; set; }
         public string ContextMenuStripMainGridDeleteAllAction { get; set; }
+        public string ContextMenuStripMainGridOpenHelp { get; set; }
         public string ContextMenuStripNotifyIconAddNewAction { get; set; }
         public string ContextMenuStripNotifyIconShowSettings { get; set; }
         public string ContextMenuStripNotifyIconShowLogs { get; set; }
+        public string ContextMenuStripNotifyIconShowHelp { get; set; }
         public string ContextMenuStripNotifyIconExitProgram { get; set; }
         public string LabelFirstlyChooseATrigger { get; set; }
 
@@ -140,6 +142,7 @@
         public string AboutLabelVersion { get; set; }
         public string AboutLabelBuildId { get; set; }
         public string AboutLabelAuthor { get; set; }
+        public string HelpMenuItem { get; set; }
 
         // Toolbar
         public string ToolbarAddAction { get; set; }

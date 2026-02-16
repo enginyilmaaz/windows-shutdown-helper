@@ -333,6 +333,14 @@ namespace WindowsShutdownHelper
                 case "getLanguageList":
                     HandleGetLanguageList();
                     break;
+                case "openWindow":
+                    string page = data.GetProperty("page").GetString();
+                    var mainWindow = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+                    if (mainWindow != null)
+                    {
+                        mainWindow.OpenSubWindow(page);
+                    }
+                    break;
                 case "openUrl":
                     string url = data.GetProperty("url").GetString();
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

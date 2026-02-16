@@ -56,9 +56,11 @@ namespace WindowsShutdownHelper.Lang
                 ContextMenuStripMainGridDeleteSelectedAction = "Ausgewählte Aktion löschen",
                 ContextMenuStripMainGridEditSelectedAction = "Ausgewählte Aktion bearbeiten",
                 ContextMenuStripMainGridDeleteAllAction = "Alle Aktionen löschen",
+                ContextMenuStripMainGridOpenHelp = "Auslöser-Hilfe",
                 ContextMenuStripNotifyIconAddNewAction = "Neue Aktion erstellen",
                 ContextMenuStripNotifyIconShowSettings = "Einstellungen",
                 ContextMenuStripNotifyIconShowLogs = "Protokolle anzeigen",
+                ContextMenuStripNotifyIconShowHelp = "Hilfe",
                 ContextMenuStripNotifyIconExitProgram = "Programm beenden",
                 LabelFirstlyChooseATrigger = "Wählen Sie zuerst einen Auslöser",
                 ToolTipShowLogs = "Öffnet den Protokoll-Viewer",
@@ -128,6 +130,7 @@ namespace WindowsShutdownHelper.Lang
                 AboutLabelVersion = "Version",
                 AboutLabelBuildId = "Build-ID",
                 AboutLabelAuthor = "Autor",
+                HelpMenuItem = "Hilfe",
                 CommonLoading = "Wird geladen...",
 
                 // Toolbar
@@ -165,7 +168,7 @@ namespace WindowsShutdownHelper.Lang
                 MainButtonEditAction = "Aktion aktualisieren",
 
                 // Bluetooth
-                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth-Gerät nicht erreichbar",
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth-Sperre",
                 BluetoothScanButton = "Geräte suchen",
                 BluetoothScanning = "Suche läuft...",
                 BluetoothNoDeviceFound = "Kein Gerät gefunden",

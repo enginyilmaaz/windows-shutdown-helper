@@ -56,9 +56,11 @@
                 ContextMenuStripMainGridDeleteSelectedAction = "Delete selected action",
                 ContextMenuStripMainGridEditSelectedAction = "Edit selected action",
                 ContextMenuStripMainGridDeleteAllAction = "Delete all actions",
+                ContextMenuStripMainGridOpenHelp = "Trigger usage help",
                 ContextMenuStripNotifyIconAddNewAction = "Create New Action",
                 ContextMenuStripNotifyIconShowSettings = "Settings",
                 ContextMenuStripNotifyIconShowLogs = "Show Logs",
+                ContextMenuStripNotifyIconShowHelp = "Help",
                 ContextMenuStripNotifyIconExitProgram = "Exit The Program",
                 LabelFirstlyChooseATrigger = "Choose a trigger first",
                 ToolTipShowLogs = "Opens the Log Viewer window",
@@ -128,6 +130,7 @@
                 AboutLabelVersion = "Version",
                 AboutLabelBuildId = "Build ID",
                 AboutLabelAuthor = "Author",
+                HelpMenuItem = "Help",
                 CommonLoading = "Loading...",
 
                 // Toolbar
@@ -165,7 +168,7 @@
                 MainButtonEditAction = "Update Action",
 
                 // Bluetooth
-                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth device not reachable",
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth Lock",
                 BluetoothScanButton = "Scan Devices",
                 BluetoothScanning = "Scanning...",
                 BluetoothNoDeviceFound = "No device found",

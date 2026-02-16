@@ -1274,3 +1274,37 @@ body {
     background: var(--border-row);
     margin: 8px 0;
 }
+
+/* ─── Help Page ─── */
+.help-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.help-intro {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.help-section {
+    border: 1px solid var(--border-row);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--input-bg);
+}
+
+.help-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.help-line {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    padding: 2px 0;
+}

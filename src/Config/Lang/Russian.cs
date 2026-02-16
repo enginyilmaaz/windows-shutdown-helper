@@ -56,9 +56,11 @@ namespace WindowsShutdownHelper.Lang
                 ContextMenuStripMainGridDeleteSelectedAction = "Удалить выбранное действие",
                 ContextMenuStripMainGridEditSelectedAction = "Редактировать выбранное действие",
                 ContextMenuStripMainGridDeleteAllAction = "Удалить все действия",
+                ContextMenuStripMainGridOpenHelp = "Справка по триггерам",
                 ContextMenuStripNotifyIconAddNewAction = "Создать новое действие",
                 ContextMenuStripNotifyIconShowSettings = "Настройки",
                 ContextMenuStripNotifyIconShowLogs = "Показать журнал",
+                ContextMenuStripNotifyIconShowHelp = "Справка",
                 ContextMenuStripNotifyIconExitProgram = "Выйти из программы",
                 LabelFirstlyChooseATrigger = "Сначала выберите триггер",
                 ToolTipShowLogs = "Открывает окно просмотра журнала",
@@ -128,6 +130,7 @@ namespace WindowsShutdownHelper.Lang
                 AboutLabelVersion = "Версия",
                 AboutLabelBuildId = "ID сборки",
                 AboutLabelAuthor = "Автор",
+                HelpMenuItem = "Справка",
                 CommonLoading = "Загрузка...",
 
                 // Toolbar
@@ -165,7 +168,7 @@ namespace WindowsShutdownHelper.Lang
                 MainButtonEditAction = "Обновить действие",
 
                 // Bluetooth
-                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth-устройство недоступно",
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth-блокировка",
                 BluetoothScanButton = "Поиск устройств",
                 BluetoothScanning = "Поиск...",
                 BluetoothNoDeviceFound = "Устройства не найдены",
