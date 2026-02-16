@@ -20,14 +20,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
       - name: Restore NuGet packages
-        run: nuget restore "Windows Shutdown Helper.sln"
+        run: dotnet restore "Windows Shutdown Helper.sln"
 
       - name: Determine version and commit info
         id: version
@@ -61,11 +60,14 @@ jobs:
       - name: Inject Build ID
         shell: pwsh
         run: |
-          $file = "BuildInfo.cs"
+          $file = "src/BuildInfo.cs"
           (Get-Content $file) -replace 'public const string CommitId = "dev"', "public const string CommitId = ""${{ steps.version.outputs.commit_short }}""" | Set-Content $file
 
       - name: Build Release
-        run: msbuild "Windows Shutdown Helper.sln" /p:Configuration=Release /p:Platform="Any CPU" /p:SignManifests=false
+        run: dotnet build "Windows Shutdown Helper.sln" -c Release --no-restore
+
+      - name: Publish Release (win-x64)
+        run: dotnet publish "Windows Shutdown Helper.csproj" -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -p:PublishSingleFile=false
 
       - name: Build Installer
         shell: pwsh
@@ -79,7 +81,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: WindowsShutdownHelper_Portable
-          path: bin/Release/Windows Shutdown Helper.exe
+          path: |
+            bin/Release/net8.0-windows/win-x64/publish/
 
       - name: Upload Installer (dev)
         if: github.ref_name != 'master'
@@ -98,4 +101,3 @@ jobs:
           make_latest: true
           files: |
             installer_output/${{ steps.version.outputs.setup_name }}.exe
-            bin/Release/Windows Shutdown Helper.exe
