@@ -4,6 +4,7 @@ const App = {
     _pages: {},
     _pageLoadPromises: {},
     _navigationToken: 0,
+    _confirmModalCallback: null,
     _pageConfig: {
         main: { scriptPath: 'Js/Pages/Main.js', globalName: 'MainPage' },
         settings: { scriptPath: 'Js/Pages/Settings.js', globalName: 'SettingsPage' },
@@ -420,7 +421,49 @@ const App = {
         });
     },
 
+    openConfirmModal(options) {
+        options = options || {};
+        var self = this;
+        var L = Bridge.lang.bind(Bridge);
+
+        var modalTitle = document.getElementById('modal-title');
+        modalTitle.textContent = options.title || (L('MessageTitleWarn') || 'Confirm');
+
+        var modalBody = document.getElementById('modal-body');
+        modalBody.innerHTML = '' +
+            '<div class="form-row">' +
+                '<span class="form-label">' + (options.message || '') + '</span>' +
+            '</div>' +
+            '<div class="settings-actions">' +
+                '<button class="btn btn-secondary" id="confirm-cancel">' +
+                    (options.cancelText || L('SettingsFormButtonCancel') || 'Cancel') +
+                '</button>' +
+                '<button class="btn btn-danger" id="confirm-approve">' +
+                    (options.confirmText || 'OK') +
+                '</button>' +
+            '</div>';
+
+        this._confirmModalCallback = typeof options.onConfirm === 'function'
+            ? options.onConfirm
+            : null;
+
+        document.getElementById('confirm-cancel').addEventListener('click', function () {
+            self.closeModal();
+        });
+
+        document.getElementById('confirm-approve').addEventListener('click', function () {
+            var callback = self._confirmModalCallback;
+            self.closeModal();
+            if (callback) {
+                callback();
+            }
+        });
+
+        document.getElementById('modal-overlay').classList.remove('hidden');
+    },
+
     closeModal() {
+        this._confirmModalCallback = null;
         document.getElementById('modal-overlay').classList.add('hidden');
     },
 

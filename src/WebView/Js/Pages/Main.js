@@ -176,6 +176,19 @@ window.MainPage = {
         var confirmMessage = L('MessageContentConfirmDeleteAction')
             || ((L('ContextMenuStripMainGridDeleteSelectedAction') || 'Delete selected action') + '?');
 
+        if (window.App && typeof window.App.openConfirmModal === 'function') {
+            window.App.openConfirmModal({
+                title: L('MessageTitleWarn') || 'Confirm',
+                message: confirmMessage,
+                confirmText: L('ContextMenuStripMainGridDeleteSelectedAction') || 'Delete',
+                cancelText: L('SettingsFormButtonCancel') || 'Cancel',
+                onConfirm: function () {
+                    Bridge.send('deleteAction', { index: index });
+                }
+            });
+            return;
+        }
+
         if (!window.confirm(confirmMessage)) {
             return;
         }
