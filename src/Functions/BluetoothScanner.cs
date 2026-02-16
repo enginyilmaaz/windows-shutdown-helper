@@ -185,8 +185,6 @@ namespace WindowsShutdownHelper.Functions
                 Interlocked.Increment(ref _discoveryVersion);
             }
 
-            _monitorLastSeen[args.BluetoothAddress] = info.LastSeen;
-
             if (!string.IsNullOrEmpty(name))
             {
                 DeviceDiscovered?.Invoke(info);
@@ -256,7 +254,6 @@ namespace WindowsShutdownHelper.Functions
                 Interlocked.Increment(ref _discoveryVersion);
             }
 
-            _monitorLastSeen[macLong] = deviceInfo.LastSeen;
             DeviceDiscovered?.Invoke(deviceInfo);
         }
 
