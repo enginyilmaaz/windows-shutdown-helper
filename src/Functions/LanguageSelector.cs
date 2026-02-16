@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
+using System.Threading;
 using WindowsShutdownHelper.Lang;
 
 namespace WindowsShutdownHelper.Functions
@@ -12,21 +11,31 @@ namespace WindowsShutdownHelper.Functions
     internal class LanguageSelector
 
     {
-        private static Language getDefaults(string langCode)
+        private static readonly string[] SupportedLanguageOrder = { "en", "tr", "it", "de", "fr", "ru" };
+        private static readonly HashSet<string> SupportedLanguages = new HashSet<string>(SupportedLanguageOrder, StringComparer.Ordinal);
+        private static readonly Dictionary<string, Lazy<Language>> LanguageCache = new Dictionary<string, Lazy<Language>>(StringComparer.Ordinal)
         {
-            switch (langCode)
-            {
-                case "tr": return Turkish.LangTurkish();
-                case "en": return English.LangEnglish();
-                case "it": return Italian.LangItalian();
-                case "de": return German.LangGerman();
-                case "fr": return French.LangFrench();
-                case "ru": return Russian.LangRussian();
-                default: return English.LangEnglish();
-            }
-        }
+            ["en"] = new Lazy<Language>(English.LangEnglish, LazyThreadSafetyMode.ExecutionAndPublication),
+            ["tr"] = new Lazy<Language>(Turkish.LangTurkish, LazyThreadSafetyMode.ExecutionAndPublication),
+            ["it"] = new Lazy<Language>(Italian.LangItalian, LazyThreadSafetyMode.ExecutionAndPublication),
+            ["de"] = new Lazy<Language>(German.LangGerman, LazyThreadSafetyMode.ExecutionAndPublication),
+            ["fr"] = new Lazy<Language>(French.LangFrench, LazyThreadSafetyMode.ExecutionAndPublication),
+            ["ru"] = new Lazy<Language>(Russian.LangRussian, LazyThreadSafetyMode.ExecutionAndPublication)
+        };
 
-        private static readonly string[] _supportedLangs = { "en", "tr", "it", "de", "fr", "ru" };
+        private static readonly object LangFileEnsureSyncRoot = new object();
+        private static int _langFileEnsureScheduled;
+        private static bool _langFilesEnsured;
+
+        private static Language GetDefaults(string langCode)
+        {
+            if (!LanguageCache.TryGetValue(langCode, out Lazy<Language> lazyLang))
+            {
+                lazyLang = LanguageCache["en"];
+            }
+
+            return lazyLang.Value;
+        }
 
         public static Language LanguageFile()
         {
@@ -37,67 +46,82 @@ namespace WindowsShutdownHelper.Functions
             if (settings.Language == "auto" || string.IsNullOrEmpty(settings.Language))
             {
                 string systemLang = CultureInfo.CurrentCulture.TwoLetterISOLanguageName;
-                langCode = Array.Exists(_supportedLangs, l => l == systemLang) ? systemLang : "en";
+                langCode = SupportedLanguages.Contains(systemLang) ? systemLang : "en";
             }
             else
             {
-                langCode = Array.Exists(_supportedLangs, l => l == settings.Language) ? settings.Language : "en";
+                langCode = SupportedLanguages.Contains(settings.Language) ? settings.Language : "en";
             }
 
-            // Use C# object directly - no JSON round-trip
-            Language result = getDefaults(langCode);
+            Language result = GetDefaults(langCode);
 
-            // Write lang JSON files in background (for settings dropdown)
-            Task.Run(() => EnsureLangFilesExist());
+            if (Interlocked.Exchange(ref _langFileEnsureScheduled, 1) == 0)
+            {
+                Task.Run(EnsureLangFilesExist);
+            }
 
             return result;
         }
 
         public static void EnsureLangFilesExist()
         {
-            try
+            if (_langFilesEnsured)
             {
-                string langDir = AppContext.BaseDirectory + "\\lang";
-                Directory.CreateDirectory(langDir);
-
-                WriteLangIfMissing(langDir, "en", English.LangEnglish());
-                WriteLangIfMissing(langDir, "tr", Turkish.LangTurkish());
-                WriteLangIfMissing(langDir, "it", Italian.LangItalian());
-                WriteLangIfMissing(langDir, "de", German.LangGerman());
-                WriteLangIfMissing(langDir, "fr", French.LangFrench());
-                WriteLangIfMissing(langDir, "ru", Russian.LangRussian());
+                return;
             }
-            catch { }
+
+            lock (LangFileEnsureSyncRoot)
+            {
+                if (_langFilesEnsured)
+                {
+                    return;
+                }
+
+                try
+                {
+                    string langDir = Path.Combine(AppContext.BaseDirectory, "lang");
+                    Directory.CreateDirectory(langDir);
+
+                    foreach (string code in SupportedLanguageOrder)
+                    {
+                        WriteLangIfMissing(langDir, code, GetDefaults(code));
+                    }
+
+                    _langFilesEnsured = true;
+                }
+                catch
+                {
+                    // Keep startup resilient.
+                }
+            }
         }
 
         private static void WriteLangIfMissing(string langDir, string code, Language lang)
         {
-            string path = Path.Combine(langDir, "lang_" + code + ".json");
-            if (!File.Exists(path))
+            try
             {
-                JsonWriter.WriteJson(path, true, lang);
+                string path = Path.Combine(langDir, "lang_" + code + ".json");
+                if (!File.Exists(path))
+                {
+                    JsonWriter.WriteJson(path, true, lang);
+                }
+            }
+            catch
+            {
+                // Keep language file generation best-effort only.
             }
         }
 
         public static List<LanguageNames> GetLanguageNames()
         {
-            var list = new List<LanguageNames>();
-            var langs = new (string code, Language lang)[]
+            var list = new List<LanguageNames>(SupportedLanguageOrder.Length);
+            foreach (string code in SupportedLanguageOrder)
             {
-                ("en", English.LangEnglish()),
-                ("tr", Turkish.LangTurkish()),
-                ("it", Italian.LangItalian()),
-                ("de", German.LangGerman()),
-                ("fr", French.LangFrench()),
-                ("ru", Russian.LangRussian()),
-            };
-
-            foreach (var entry in langs)
-            {
+                Language lang = GetDefaults(code);
                 list.Add(new LanguageNames
                 {
-                    LangCode = entry.code,
-                    LangName = entry.lang?.LangNativeName ?? entry.code.ToUpper()
+                    LangCode = code,
+                    LangName = lang?.LangNativeName ?? code.ToUpperInvariant()
                 });
             }
 

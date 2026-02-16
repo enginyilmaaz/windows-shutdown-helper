@@ -16,22 +16,41 @@ const Bridge = {
 
     // Register handler for messages from C#
     on(type, handler) {
-        if (!this._handlers[type]) this._handlers[type] = [];
+        if (typeof handler !== 'function') {
+            return function () { };
+        }
+
+        if (!this._handlers[type]) {
+            this._handlers[type] = [];
+        }
+
         this._handlers[type].push(handler);
+        var self = this;
+        return function () {
+            self.off(type, handler);
+        };
     },
 
     // Unregister handler
     off(type, handler) {
         var list = this._handlers[type];
         if (!list) return;
+
+        if (!handler) {
+            this._handlers[type] = [];
+            return;
+        }
+
         this._handlers[type] = list.filter(function (h) { return h !== handler; });
     },
 
     // Emit event to registered handlers
     _emit(type, data) {
         const handlers = this._handlers[type];
-        if (handlers) {
-            handlers.forEach(h => h(data));
+        if (handlers && handlers.length > 0) {
+            handlers.slice().forEach(function (handler) {
+                handler(data);
+            });
         }
     },
 

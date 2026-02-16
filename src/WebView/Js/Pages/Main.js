@@ -6,6 +6,59 @@ window.MainPage = {
     _rawActions: [],
     _actionTypeByLabel: null,
     _triggerTypeByLabel: null,
+    _cleanupFns: [],
+    _perfSamples: [],
+    _perfCount: 0,
+
+    _registerCleanup(fn) {
+        if (typeof fn === 'function') {
+            this._cleanupFns.push(fn);
+        }
+    },
+
+    _disposeHandlers() {
+        while (this._cleanupFns.length > 0) {
+            var fn = this._cleanupFns.pop();
+            try {
+                fn();
+            } catch (_) {
+            }
+        }
+    },
+
+    _recordRenderPerf(durationMs) {
+        if (!window.__WSHPerfEnabled) {
+            return;
+        }
+
+        this._perfCount += 1;
+        if (this._perfSamples.length >= 200) {
+            this._perfSamples.shift();
+        }
+
+        this._perfSamples.push(durationMs);
+
+        if (this._perfCount % 50 !== 0) {
+            return;
+        }
+
+        var sorted = this._perfSamples.slice().sort(function (a, b) { return a - b; });
+        if (sorted.length === 0) {
+            return;
+        }
+
+        function percentile(arr, p) {
+            var idx = Math.floor((arr.length - 1) * p);
+            return arr[Math.max(0, Math.min(idx, arr.length - 1))];
+        }
+
+        var p95 = percentile(sorted, 0.95).toFixed(2);
+        var p99 = percentile(sorted, 0.99).toFixed(2);
+        var avg = (sorted.reduce(function (sum, val) { return sum + val; }, 0) / sorted.length).toFixed(2);
+        if (window.console && window.console.debug) {
+            window.console.debug('[PERF] MainPage.renderTable count=' + this._perfCount + ' avg=' + avg + 'ms p95=' + p95 + 'ms p99=' + p99 + 'ms');
+        }
+    },
 
     _resetLabelCaches() {
         this._actionTypeByLabel = null;
@@ -460,54 +513,168 @@ window.MainPage = {
         '</div>';
     },
 
+    beforeLeave() {
+        this._disposeHandlers();
+    },
+
+    _hideContextMenu() {
+        var ctx = document.getElementById('ctx-menu');
+        if (ctx) {
+            ctx.classList.remove('show');
+        }
+    },
+
+    _showContextMenu(x, y) {
+        var ctx = document.getElementById('ctx-menu');
+        if (!ctx) {
+            return;
+        }
+
+        ctx.style.left = x + 'px';
+        ctx.style.top = y + 'px';
+        ctx.classList.add('show');
+    },
+
+    _setSelectedRow(wrap, row, index) {
+        var prev = wrap.querySelector('tr.selected');
+        if (prev && prev !== row) {
+            prev.classList.remove('selected');
+        }
+
+        row.classList.add('selected');
+        this._selectedRow = index;
+    },
+
+    _handleTableClick(e) {
+        var wrap = document.getElementById('action-table-wrap');
+        if (!wrap) return;
+
+        var row = e.target.closest('tr[data-idx]');
+        if (!row || !wrap.contains(row)) return;
+
+        var idx = parseInt(row.getAttribute('data-idx'), 10);
+        if (isNaN(idx) || idx < 0 || idx >= this._rawActions.length) return;
+
+        this._setSelectedRow(wrap, row, idx);
+
+        var actionBtn = e.target.closest('.row-action-btn[data-row-action]');
+        if (!actionBtn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        var rowAction = actionBtn.getAttribute('data-row-action');
+        if (rowAction === 'delete') {
+            this.requestDeleteAction(idx);
+            return;
+        }
+
+        if (rowAction === 'edit') {
+            if (!window.App || typeof window.App.openEditActionModal !== 'function') return;
+            var editable = this._toEditableAction(idx, this._rawActions[idx]);
+            window.App.openEditActionModal(editable);
+        }
+    },
+
+    _handleTableContextMenu(e) {
+        var wrap = document.getElementById('action-table-wrap');
+        if (!wrap) return;
+
+        var row = e.target.closest('tr[data-idx]');
+        if (!row || !wrap.contains(row)) return;
+
+        var idx = parseInt(row.getAttribute('data-idx'), 10);
+        if (isNaN(idx) || idx < 0 || idx >= this._rawActions.length) return;
+
+        e.preventDefault();
+        this._setSelectedRow(wrap, row, idx);
+        this._showContextMenu(e.clientX, e.clientY);
+    },
+
     afterRender() {
         var self = this;
+        self._disposeHandlers();
         self._selectedRow = -1;
         self._resetLabelCaches();
 
-        // Context menu
-        document.addEventListener('click', function () {
+        var wrap = document.getElementById('action-table-wrap');
+        if (!wrap) return;
+
+        var onDocumentClick = function (e) {
             var ctx = document.getElementById('ctx-menu');
-            if (ctx) ctx.classList.remove('show');
+            if (!ctx || !ctx.classList.contains('show')) return;
+            if (!ctx.contains(e.target)) {
+                self._hideContextMenu();
+            }
+        };
+        document.addEventListener('click', onDocumentClick);
+        self._registerCleanup(function () {
+            document.removeEventListener('click', onDocumentClick);
+        });
+
+        var onWrapClick = function (e) { self._handleTableClick(e); };
+        wrap.addEventListener('click', onWrapClick);
+        self._registerCleanup(function () {
+            wrap.removeEventListener('click', onWrapClick);
+        });
+
+        var onWrapContextMenu = function (e) { self._handleTableContextMenu(e); };
+        wrap.addEventListener('contextmenu', onWrapContextMenu);
+        self._registerCleanup(function () {
+            wrap.removeEventListener('contextmenu', onWrapContextMenu);
         });
 
         var ctxDelete = document.getElementById('ctx-delete');
+        var ctxClear = document.getElementById('ctx-clear');
+
         if (ctxDelete) {
-            ctxDelete.addEventListener('click', function () {
+            var onCtxDelete = function () {
                 if (self._selectedRow >= 0) {
                     self.requestDeleteAction(self._selectedRow);
                 }
+            };
+            ctxDelete.addEventListener('click', onCtxDelete);
+            self._registerCleanup(function () {
+                ctxDelete.removeEventListener('click', onCtxDelete);
             });
         }
 
-        var ctxClear = document.getElementById('ctx-clear');
         if (ctxClear) {
-            ctxClear.addEventListener('click', function () {
+            var onCtxClear = function () {
                 Bridge.send('clearAllActions', {});
+            };
+            ctxClear.addEventListener('click', onCtxClear);
+            self._registerCleanup(function () {
+                ctxClear.removeEventListener('click', onCtxClear);
             });
         }
 
-        // Render table
         this.renderTable(Bridge._actions);
 
-        // Listen for refresh
-        Bridge.on('refreshActions', function (actions) {
+        var offRefresh = Bridge.on('refreshActions', function (actions) {
             self.renderTable(actions);
         });
+        self._registerCleanup(offRefresh);
     },
 
     renderTable(actions) {
+        var perfStart = (window.performance && typeof window.performance.now === 'function')
+            ? window.performance.now()
+            : 0;
         var self = this;
         var wrap = document.getElementById('action-table-wrap');
         if (!wrap) return;
 
         var L = Bridge.lang.bind(Bridge);
+        self._hideContextMenu();
 
-        // Store raw actions for filtering
         self._rawActions = actions || [];
+        var entries = new Array(self._rawActions.length);
+        for (var i = 0; i < self._rawActions.length; i++) {
+            entries[i] = { idx: i, action: self._rawActions[i] };
+        }
 
-        // Apply filter
-        var filtered = self._rawActions;
+        var filtered = entries;
         if (self._currentFilter && self._currentFilter !== 'all') {
             var filterMap = {
                 'ShutdownComputer': L('MainCboxActionTypeItemShutdownComputer'),
@@ -518,28 +685,32 @@ window.MainPage = {
                 'LogOffWindows': L('MainCboxActionTypeItemLogOffWindows')
             };
             var filterText = filterMap[self._currentFilter] || self._currentFilter;
-            filtered = filtered.filter(function (a) {
-                var rawType = self._normalizeActionRaw(a.actionTypeRaw || a.actionType);
-                return a.actionType === filterText ||
-                    a.actionType === self._currentFilter ||
+            filtered = filtered.filter(function (entry) {
+                var action = entry.action || {};
+                var rawType = self._normalizeActionRaw(action.actionTypeRaw || action.actionType);
+                return action.actionType === filterText ||
+                    action.actionType === self._currentFilter ||
                     rawType === self._currentFilter;
             });
         }
 
-        // Apply search
         if (self._searchQuery) {
             var q = self._searchQuery;
-            filtered = filtered.filter(function (a) {
-                return (a.triggerType || '').toLowerCase().indexOf(q) >= 0 ||
-                       (a.actionType || '').toLowerCase().indexOf(q) >= 0 ||
-                       (a.value || '').toLowerCase().indexOf(q) >= 0 ||
-                       (a.valueUnit || '').toLowerCase().indexOf(q) >= 0 ||
-                       (a.createdDate || '').toLowerCase().indexOf(q) >= 0;
+            filtered = filtered.filter(function (entry) {
+                var action = entry.action || {};
+                return (action.triggerType || '').toLowerCase().indexOf(q) >= 0 ||
+                       (action.actionType || '').toLowerCase().indexOf(q) >= 0 ||
+                       (action.value || '').toLowerCase().indexOf(q) >= 0 ||
+                       (action.valueUnit || '').toLowerCase().indexOf(q) >= 0 ||
+                       (action.createdDate || '').toLowerCase().indexOf(q) >= 0;
             });
         }
 
         if (!filtered || filtered.length === 0) {
             wrap.innerHTML = '<div class="table-empty">' + (L('MessageContentNoLog') || 'No actions yet') + '</div>';
+            if (perfStart > 0) {
+                self._recordRenderPerf(window.performance.now() - perfStart);
+            }
             return;
         }
 
@@ -556,11 +727,11 @@ window.MainPage = {
         var editTitle = L('ContextMenuStripMainGridEditSelectedAction') || 'Edit action';
         var deleteTitle = L('ContextMenuStripMainGridDeleteSelectedAction') || 'Delete selected action';
 
-        for (var i = 0; i < filtered.length; i++) {
-            var a = filtered[i];
-            // Find original index for delete
-            var origIdx = self._rawActions.indexOf(a);
-            html += '<tr data-idx="' + origIdx + '">' +
+        for (var rowIndex = 0; rowIndex < filtered.length; rowIndex++) {
+            var entry = filtered[rowIndex];
+            var a = entry.action || {};
+            var selectedClass = entry.idx === self._selectedRow ? ' class="selected"' : '';
+            html += '<tr data-idx="' + entry.idx + '"' + selectedClass + '>' +
                 '<td>' + (a.triggerType || '') + '</td>' +
                 '<td>' + (a.actionType || '') + '</td>' +
                 '<td>' + (a.value || '') + '</td>' +
@@ -580,65 +751,8 @@ window.MainPage = {
         html += '</tbody></table>';
         wrap.innerHTML = html;
 
-        // Row selection + context menu
-        wrap.querySelectorAll('tr[data-idx]').forEach(function (row) {
-            row.addEventListener('click', function () {
-                wrap.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
-                row.classList.add('selected');
-                self._selectedRow = parseInt(row.getAttribute('data-idx'));
-            });
-
-            row.addEventListener('contextmenu', function (e) {
-                e.preventDefault();
-                wrap.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
-                row.classList.add('selected');
-                self._selectedRow = parseInt(row.getAttribute('data-idx'));
-                var ctx = document.getElementById('ctx-menu');
-                if (ctx) {
-                    ctx.style.left = e.clientX + 'px';
-                    ctx.style.top = e.clientY + 'px';
-                    ctx.classList.add('show');
-                }
-            });
-        });
-
-        wrap.querySelectorAll('.row-action-btn[data-row-action="edit"]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                var row = btn.closest('tr[data-idx]');
-                if (!row) return;
-
-                var idx = parseInt(row.getAttribute('data-idx'), 10);
-                if (isNaN(idx) || idx < 0 || idx >= self._rawActions.length) return;
-
-                wrap.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
-                row.classList.add('selected');
-                self._selectedRow = idx;
-
-                if (!window.App || typeof window.App.openEditActionModal !== 'function') return;
-                var editable = self._toEditableAction(idx, self._rawActions[idx]);
-                window.App.openEditActionModal(editable);
-            });
-        });
-
-        wrap.querySelectorAll('.row-action-btn[data-row-action="delete"]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                var row = btn.closest('tr[data-idx]');
-                if (!row) return;
-
-                var idx = parseInt(row.getAttribute('data-idx'), 10);
-                if (isNaN(idx) || idx < 0) return;
-
-                wrap.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
-                row.classList.add('selected');
-                self._selectedRow = idx;
-                self.requestDeleteAction(idx);
-            });
-        });
+        if (perfStart > 0) {
+            self._recordRenderPerf(window.performance.now() - perfStart);
+        }
     }
 };

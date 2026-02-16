@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Windows.Forms;
 
 namespace WindowsShutdownHelper.Functions
 {
@@ -10,9 +9,12 @@ namespace WindowsShutdownHelper.Functions
     {
         public static Language Language = LanguageSelector.LanguageFile();
         public static string ActionTypeName;
-        private static HashSet<string> _notifiedIdleActions = new HashSet<string>();
-        private static HashSet<string> _notifiedFromNowActions = new HashSet<string>();
-        private static Dictionary<string, DateTime> _notifiedCertainTimeDates = new Dictionary<string, DateTime>();
+        private static readonly HashSet<string> _notifiedIdleActions = new HashSet<string>();
+        private static readonly HashSet<string> _notifiedFromNowActions = new HashSet<string>();
+        private static readonly Dictionary<string, DateTime> _notifiedCertainTimeDates = new Dictionary<string, DateTime>();
+        private static readonly Dictionary<string, DateTime> _fromNowExecutionCache = new Dictionary<string, DateTime>();
+        private static readonly Dictionary<string, TimeSpan> _certainTimeCache = new Dictionary<string, TimeSpan>();
+        private static readonly Dictionary<string, int> _idleSecondsCache = new Dictionary<string, int>();
         private static ActionCountdownNotifier _sharedCountdownNotifier;
 
         public static void ResetIdleNotifications()
@@ -36,8 +38,10 @@ namespace WindowsShutdownHelper.Functions
 
         private static bool IsCountdownNotifierVisible()
         {
-            return Application.OpenForms.OfType<ActionCountdownNotifier>()
-                .Any(form => form.Visible && form.Opacity > 0);
+            return _sharedCountdownNotifier != null &&
+                   !_sharedCountdownNotifier.IsDisposed &&
+                   _sharedCountdownNotifier.Visible &&
+                   _sharedCountdownNotifier.Opacity > 0;
         }
 
         private static bool ShowCountdownNotification(
@@ -62,99 +66,134 @@ namespace WindowsShutdownHelper.Functions
             return true;
         }
 
-        public static void ShowNotification(ActionModel action, uint idleTimeMin)
+        public static void ShowNotification(ActionModel action, uint idleTimeSec, Settings settings, DateTime now)
         {
-            Settings settings = SettingsStorage.LoadOrDefault();
-
-            if (settings.IsCountdownNotifierEnabled)
+            if (action == null || settings == null || !settings.IsCountdownNotifierEnabled)
             {
-                ActionTypeLocalization(action);
+                return;
+            }
 
-                if (action.TriggerType == Config.TriggerTypes.SystemIdle)
+            ActionTypeLocalization(action);
+            string actionKey = BuildActionKey(action);
+
+            if (action.TriggerType == Config.TriggerTypes.SystemIdle)
+            {
+                if (!TryGetCachedSystemIdleSeconds(action, actionKey, out int actionValue))
                 {
-                    if (!TryGetSystemIdleSeconds(action, out int actionValue)) return;
-                    string actionKey = action.CreatedDate + "_" + action.ActionType;
-
-                    if (idleTimeMin >= actionValue - settings.CountdownNotifierSeconds
-                        && !_notifiedIdleActions.Contains(actionKey))
-                    {
-                        bool shown = ShowCountdownNotification(
-                            Language.MessageContentCancelForSystemIdle,
-                            settings.CountdownNotifierSeconds,
-                            action);
-                        if (shown)
-                        {
-                            _notifiedIdleActions.Add(actionKey);
-                        }
-                    }
+                    return;
                 }
 
-                else if (action.TriggerType == Config.TriggerTypes.FromNow)
+                string idleNotifyKey = (action.CreatedDate ?? string.Empty) + "_" + (action.ActionType ?? string.Empty);
+
+                if (idleTimeSec >= actionValue - settings.CountdownNotifierSeconds &&
+                    !_notifiedIdleActions.Contains(idleNotifyKey))
                 {
-                    if (!DateTime.TryParseExact(
-                        action.Value,
-                        "dd.MM.yyyy HH:mm:ss",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out DateTime actionExecuteDate))
-                    {
-                        return;
-                    }
+                    bool shown = ShowCountdownNotification(
+                        Language.MessageContentCancelForSystemIdle,
+                        settings.CountdownNotifierSeconds,
+                        action);
 
-                    DateTime now = DateTime.Now;
-                    DateTime notificationTime = actionExecuteDate.AddSeconds(-settings.CountdownNotifierSeconds);
-                    string actionKey = BuildActionKey(action);
-
-                    if (now >= actionExecuteDate)
+                    if (shown)
                     {
-                        return;
-                    }
-
-                    if (now >= notificationTime && !_notifiedFromNowActions.Contains(actionKey))
-                    {
-                        bool shown = ShowCountdownNotification(
-                            Language.MessageContentYouCanThat,
-                            settings.CountdownNotifierSeconds,
-                            action);
-                        if (shown)
-                        {
-                            _notifiedFromNowActions.Add(actionKey);
-                        }
+                        _notifiedIdleActions.Add(idleNotifyKey);
                     }
                 }
+                return;
+            }
 
-
-                else if (action.TriggerType == Config.TriggerTypes.CertainTime)
+            if (action.TriggerType == Config.TriggerTypes.FromNow)
+            {
+                if (!TryGetCachedFromNowExecution(action, actionKey, out DateTime actionExecuteDate))
                 {
-                    if (!DateTime.TryParseExact(
-                        action.Value,
-                        "HH:mm:ss",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out DateTime actionExecuteDate))
-                    {
-                        return;
-                    }
+                    return;
+                }
 
-                    DateTime now = DateTime.Now;
-                    DateTime executionToday = now.Date.Add(actionExecuteDate.TimeOfDay);
-                    DateTime notificationTime = executionToday.AddSeconds(-settings.CountdownNotifierSeconds);
-                    string actionKey = BuildActionKey(action);
-                    bool isInNotificationWindow = now >= notificationTime && now < executionToday;
-                    bool isNotifiedToday = _notifiedCertainTimeDates.TryGetValue(actionKey, out DateTime notifiedDate) &&
-                                           notifiedDate.Date == now.Date;
+                DateTime notificationTime = actionExecuteDate.AddSeconds(-settings.CountdownNotifierSeconds);
+                if (now >= actionExecuteDate)
+                {
+                    return;
+                }
 
-                    if (isInNotificationWindow && !isNotifiedToday)
+                if (now >= notificationTime && !_notifiedFromNowActions.Contains(actionKey))
+                {
+                    bool shown = ShowCountdownNotification(
+                        Language.MessageContentYouCanThat,
+                        settings.CountdownNotifierSeconds,
+                        action);
+                    if (shown)
                     {
-                        bool shown = ShowCountdownNotification(
-                            Language.MessageContentYouCanThat,
-                            settings.CountdownNotifierSeconds,
-                            action);
-                        if (shown)
-                        {
-                            _notifiedCertainTimeDates[actionKey] = now.Date;
-                        }
+                        _notifiedFromNowActions.Add(actionKey);
                     }
+                }
+                return;
+            }
+
+            if (action.TriggerType == Config.TriggerTypes.CertainTime)
+            {
+                if (!TryGetCachedCertainTime(action, actionKey, out TimeSpan executionTime))
+                {
+                    return;
+                }
+
+                DateTime executionToday = now.Date.Add(executionTime);
+                DateTime notificationTime = executionToday.AddSeconds(-settings.CountdownNotifierSeconds);
+                bool isInNotificationWindow = now >= notificationTime && now < executionToday;
+                bool isNotifiedToday = _notifiedCertainTimeDates.TryGetValue(actionKey, out DateTime notifiedDate) &&
+                                       notifiedDate.Date == now.Date;
+
+                if (isInNotificationWindow && !isNotifiedToday)
+                {
+                    bool shown = ShowCountdownNotification(
+                        Language.MessageContentYouCanThat,
+                        settings.CountdownNotifierSeconds,
+                        action);
+
+                    if (shown)
+                    {
+                        _notifiedCertainTimeDates[actionKey] = now.Date;
+                    }
+                }
+            }
+        }
+
+        public static void CleanupState(IEnumerable<ActionModel> actions)
+        {
+            var validKeys = new HashSet<string>(actions.Select(BuildActionKey));
+            var validIdleKeys = new HashSet<string>(actions.Select(a =>
+                (a?.CreatedDate ?? string.Empty) + "_" + (a?.ActionType ?? string.Empty)));
+
+            _notifiedIdleActions.RemoveWhere(key => !validIdleKeys.Contains(key));
+            _notifiedFromNowActions.RemoveWhere(key => !validKeys.Contains(key));
+
+            foreach (string key in _notifiedCertainTimeDates.Keys.ToList())
+            {
+                if (!validKeys.Contains(key))
+                {
+                    _notifiedCertainTimeDates.Remove(key);
+                }
+            }
+
+            foreach (string key in _fromNowExecutionCache.Keys.ToList())
+            {
+                if (!validKeys.Contains(key))
+                {
+                    _fromNowExecutionCache.Remove(key);
+                }
+            }
+
+            foreach (string key in _certainTimeCache.Keys.ToList())
+            {
+                if (!validKeys.Contains(key))
+                {
+                    _certainTimeCache.Remove(key);
+                }
+            }
+
+            foreach (string key in _idleSecondsCache.Keys.ToList())
+            {
+                if (!validKeys.Contains(key))
+                {
+                    _idleSecondsCache.Remove(key);
                 }
             }
         }
@@ -170,6 +209,78 @@ namespace WindowsShutdownHelper.Functions
                    (action.TriggerType ?? string.Empty) + "|" +
                    (action.ActionType ?? string.Empty) + "|" +
                    (action.Value ?? string.Empty);
+        }
+
+        private static bool TryGetCachedFromNowExecution(ActionModel action, string actionKey, out DateTime executionDate)
+        {
+            if (_fromNowExecutionCache.TryGetValue(actionKey, out executionDate))
+            {
+                return true;
+            }
+
+            if (action == null || string.IsNullOrWhiteSpace(action.Value))
+            {
+                executionDate = default;
+                return false;
+            }
+
+            if (!DateTime.TryParseExact(
+                    action.Value,
+                    "dd.MM.yyyy HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out executionDate))
+            {
+                return false;
+            }
+
+            _fromNowExecutionCache[actionKey] = executionDate;
+            return true;
+        }
+
+        private static bool TryGetCachedCertainTime(ActionModel action, string actionKey, out TimeSpan executionTime)
+        {
+            if (_certainTimeCache.TryGetValue(actionKey, out executionTime))
+            {
+                return true;
+            }
+
+            if (action == null || string.IsNullOrWhiteSpace(action.Value))
+            {
+                executionTime = default;
+                return false;
+            }
+
+            if (!DateTime.TryParseExact(
+                    action.Value,
+                    "HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime parsed))
+            {
+                executionTime = default;
+                return false;
+            }
+
+            executionTime = parsed.TimeOfDay;
+            _certainTimeCache[actionKey] = executionTime;
+            return true;
+        }
+
+        private static bool TryGetCachedSystemIdleSeconds(ActionModel action, string actionKey, out int seconds)
+        {
+            if (_idleSecondsCache.TryGetValue(actionKey, out seconds))
+            {
+                return true;
+            }
+
+            if (!TryGetSystemIdleSeconds(action, out seconds))
+            {
+                return false;
+            }
+
+            _idleSecondsCache[actionKey] = seconds;
+            return true;
         }
 
         private static bool TryGetSystemIdleSeconds(ActionModel action, out int seconds)
@@ -207,9 +318,14 @@ namespace WindowsShutdownHelper.Functions
             return true;
         }
 
-
         public static void ActionTypeLocalization(ActionModel action)
         {
+            if (action == null)
+            {
+                ActionTypeName = string.Empty;
+                return;
+            }
+
             if (action.ActionType == Config.ActionTypes.LockComputer)
             {
                 ActionTypeName = Language.MainCboxActionTypeItemLockComputer;

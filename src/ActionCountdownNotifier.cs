@@ -403,11 +403,31 @@ namespace WindowsShutdownHelper
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            string json = e.WebMessageAsJson;
-            var doc = JsonDocument.Parse(json);
-            string msgJson = doc.RootElement.GetString();
-            var msg = JsonDocument.Parse(msgJson);
-            string type = msg.RootElement.GetProperty("type").GetString();
+            string msgJson;
+            try
+            {
+                msgJson = e.TryGetWebMessageAsString();
+            }
+            catch
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(msgJson))
+            {
+                return;
+            }
+
+            using var msg = JsonDocument.Parse(msgJson);
+            if (!msg.RootElement.TryGetProperty("type", out JsonElement typeElement))
+            {
+                return;
+            }
+
+            string type = typeElement.GetString();
+            JsonElement data = msg.RootElement.TryGetProperty("data", out JsonElement payload)
+                ? payload
+                : default;
 
             switch (type)
             {
@@ -427,10 +447,24 @@ namespace WindowsShutdownHelper
                     HideAndReset();
                     break;
                 case "delete":
-                    MainForm.ActionList.Remove(Action);
-                    MainForm.IsDeletedFromNotifier = true;
-                    JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true,
-                        MainForm.ActionList);
+                    if (MainForm.ActionList.Remove(Action))
+                    {
+                        bool persisted = false;
+                        foreach (Form form in Application.OpenForms)
+                        {
+                            if (form is MainForm main)
+                            {
+                                main.WriteJsonToActionList();
+                                persisted = true;
+                                break;
+                            }
+                        }
+
+                        if (!persisted)
+                        {
+                            JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true, MainForm.ActionList);
+                        }
+                    }
                     HideAndReset();
                     break;
                 case "skip":
@@ -438,10 +472,12 @@ namespace WindowsShutdownHelper
                     HideAndReset();
                     break;
                 case "dragStart":
-                    var data = msg.RootElement.GetProperty("data");
-                    int sx = data.GetProperty("x").GetInt32();
-                    int sy = data.GetProperty("y").GetInt32();
-                    StartDrag(sx, sy);
+                    if (data.ValueKind == JsonValueKind.Object)
+                    {
+                        int sx = data.GetProperty("x").GetInt32();
+                        int sy = data.GetProperty("y").GetInt32();
+                        StartDrag(sx, sy);
+                    }
                     break;
             }
         }

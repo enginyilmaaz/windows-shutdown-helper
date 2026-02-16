@@ -208,6 +208,13 @@ const App = {
         return null;
     },
 
+    _disposePageHandlers(page) {
+        var pageObject = this._getPage(page);
+        if (pageObject && typeof pageObject.beforeLeave === 'function') {
+            pageObject.beforeLeave();
+        }
+    },
+
     ensurePageLoaded(page) {
         var existing = this._getPage(page);
         if (existing) {
@@ -470,7 +477,10 @@ const App = {
     navigate(page) {
         if (!this._pageConfig[page]) return;
 
+        this._disposePageHandlers(this._currentPage);
+
         this._currentPage = page;
+        var targetPage = page;
 
         // Update menu active state
         document.querySelectorAll('.menu-item[data-page]').forEach(function (item) {
@@ -488,6 +498,7 @@ const App = {
                 var container = document.getElementById('page-container');
                 if (!container) return;
 
+                self._disposePageHandlers(targetPage);
                 container.innerHTML = pageObject.render();
                 if (pageObject.afterRender) {
                     pageObject.afterRender();

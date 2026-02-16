@@ -2,6 +2,23 @@
 window.LogsPage = {
     _logs: [],
     _allLogs: [],
+    _cleanupFns: [],
+
+    _registerCleanup(fn) {
+        if (typeof fn === 'function') {
+            this._cleanupFns.push(fn);
+        }
+    },
+
+    _disposeHandlers() {
+        while (this._cleanupFns.length > 0) {
+            var fn = this._cleanupFns.pop();
+            try {
+                fn();
+            } catch (_) {
+            }
+        }
+    },
 
     render() {
         var L = Bridge.lang.bind(Bridge);
@@ -37,33 +54,59 @@ window.LogsPage = {
         '</div>';
     },
 
+    beforeLeave() {
+        this._disposeHandlers();
+    },
+
     afterRender() {
         var self = this;
+        self._disposeHandlers();
 
         Bridge.send('loadLogs', {});
 
-        Bridge.on('logsLoaded', function (data) {
+        var offLogsLoaded = Bridge.on('logsLoaded', function (data) {
             self._allLogs = data || [];
             self._applyFilterSort();
         });
+        self._registerCleanup(offLogsLoaded);
 
-        document.getElementById('log-filter').addEventListener('change', function () {
+        var filterEl = document.getElementById('log-filter');
+        var onFilterChange = function () {
             self._applyFilterSort();
+        };
+        filterEl.addEventListener('change', onFilterChange);
+        self._registerCleanup(function () {
+            filterEl.removeEventListener('change', onFilterChange);
         });
 
-        document.getElementById('log-sort').addEventListener('change', function () {
+        var sortEl = document.getElementById('log-sort');
+        var onSortChange = function () {
             self._applyFilterSort();
+        };
+        sortEl.addEventListener('change', onSortChange);
+        self._registerCleanup(function () {
+            sortEl.removeEventListener('change', onSortChange);
         });
 
-        document.getElementById('log-clear').addEventListener('click', function () {
+        var clearEl = document.getElementById('log-clear');
+        var onClearClick = function () {
             Bridge.send('clearLogs', {});
             self._allLogs = [];
             self._logs = [];
             self._renderTable();
+        };
+        clearEl.addEventListener('click', onClearClick);
+        self._registerCleanup(function () {
+            clearEl.removeEventListener('click', onClearClick);
         });
 
-        document.getElementById('log-back').addEventListener('click', function () {
+        var backEl = document.getElementById('log-back');
+        var onBackClick = function () {
             App.navigate('main');
+        };
+        backEl.addEventListener('click', onBackClick);
+        self._registerCleanup(function () {
+            backEl.removeEventListener('click', onBackClick);
         });
     },
 

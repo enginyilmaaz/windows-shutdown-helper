@@ -18,7 +18,6 @@ namespace WindowsShutdownHelper
         public static Language Language = LanguageSelector.LanguageFile();
         public static List<ActionModel> ActionList = new List<ActionModel>();
         public static Settings Settings = new Settings();
-        public static bool IsDeletedFromNotifier;
         public static bool IsSkippedCertainTimeAction;
         public static bool IsApplicationExiting;
         public static Timer Timer = new Timer();
@@ -42,6 +41,30 @@ namespace WindowsShutdownHelper
         private readonly Dictionary<string, DateTime> _certainTimeLastExecutionDates = new Dictionary<string, DateTime>();
         private bool _subWindowPrewarmStarted;
         private bool _startupErrorShown;
+        private readonly Dictionary<string, ActionRuntimeState> _actionRuntimeStates =
+            new Dictionary<string, ActionRuntimeState>();
+        private int _lastBluetoothDiscoveryVersion = -1;
+
+        [Flags]
+        private enum ActionExecutionResult
+        {
+            None = 0,
+            Executed = 1,
+            RemoveAction = 2,
+            NeedsPersist = 4
+        }
+
+        private sealed class ActionRuntimeState
+        {
+            public string ExecutionKey;
+            public uint IdleSeconds;
+            public bool HasIdleSeconds;
+            public DateTime FromNowTarget;
+            public bool HasFromNowTarget;
+            public TimeSpan CertainTimeOfDay;
+            public bool HasCertainTime;
+            public ulong BluetoothAddress;
+        }
 
         public MainForm()
         {
@@ -69,32 +92,29 @@ namespace WindowsShutdownHelper
         public void DeleteExpriedAction()
         {
             bool changed = false;
-            foreach (ActionModel action in ActionList.ToList())
+            DateTime now = DateTime.Now;
+
+            for (int index = ActionList.Count - 1; index >= 0; --index)
             {
+                ActionModel action = ActionList[index];
                 if (action.TriggerType == Config.TriggerTypes.FromNow)
                 {
-                    if (DateTime.TryParseExact(
-                        action.Value,
-                        "dd.MM.yyyy HH:mm:ss",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out DateTime actionDate))
+                    if (!TryParseFromNowValue(action, out DateTime actionDate) || now > actionDate)
                     {
-                        if (DateTime.Now > actionDate)
-                        {
-                            ActionList.Remove(action);
-                            changed = true;
-                        }
-                    }
-                    else
-                    {
-                        // Remove malformed scheduled entries to avoid runtime crashes.
-                        ActionList.Remove(action);
+                        ActionList.RemoveAt(index);
                         changed = true;
                     }
                 }
             }
-            if (changed) WriteJsonToActionList();
+
+            if (changed)
+            {
+                WriteJsonToActionList();
+            }
+            else
+            {
+                RebuildActionRuntimeStates();
+            }
         }
 
         private void mainForm_Load(object sender, EventArgs e)
@@ -135,6 +155,7 @@ namespace WindowsShutdownHelper
             {
                 DetectScreen.ManuelLockingActionLogger();
                 ActionList = LoadActionList();
+                RebuildActionRuntimeStates();
 
                 DeleteExpriedAction();
                 EnsureBluetoothMonitoring();
@@ -158,6 +179,7 @@ namespace WindowsShutdownHelper
 
                 // Apply modern tray menu renderer based on theme
                 _cachedSettings = LoadSettings();
+                Logger.Initialize(_cachedSettings);
                 ApplySettingsOnStartup(_cachedSettings);
                 bool isDark = DetermineIfDark(_cachedSettings.Theme);
                 ContextMenuStripNotifyIcon.Renderer = new WindowsShutdownHelper.Functions.ModernMenuRenderer(isDark);
@@ -170,6 +192,7 @@ namespace WindowsShutdownHelper
             {
                 ActionList = new List<ActionModel>();
                 _cachedSettings = Config.SettingsINI.DefaulSettingFile();
+                Logger.Initialize(_cachedSettings);
                 ReportStartupError("Baslangic verileri yuklenemedi", ex);
             }
             finally
@@ -177,8 +200,7 @@ namespace WindowsShutdownHelper
                 _bootDataReady = true;
                 TrySendInitData();
 
-                // Log app started in background
-                _ = System.Threading.Tasks.Task.Run(() => Logger.DoLog(Config.ActionTypes.AppStarted, _cachedSettings));
+                Logger.DoLog(Config.ActionTypes.AppStarted, _cachedSettings);
             }
         }
 
@@ -313,15 +335,7 @@ namespace WindowsShutdownHelper
         {
             if (!_webViewReady) return;
 
-            // Serialize language object via reflection
-            var langDict = new Dictionary<string, string>();
-            foreach (PropertyInfo prop in typeof(Language).GetProperties())
-            {
-                var val = prop.GetValue(Language);
-                if (val != null) langDict[prop.Name] = val.ToString();
-            }
-
-            // Build translated actions for display
+            var langDict = LanguagePayloadCache.Get(Language);
             var displayActions = GetTranslatedActions();
 
             var settingsObj = _cachedSettings ?? LoadSettings();
@@ -433,6 +447,22 @@ namespace WindowsShutdownHelper
             }
         }
 
+        public void UpdateCachedSettings(Settings settings)
+        {
+            if (settings == null)
+            {
+                return;
+            }
+
+            _cachedSettings = settings;
+            Logger.UpdateSettings(settings);
+        }
+
+        public Settings GetCachedSettingsOrDefault()
+        {
+            return _cachedSettings ?? LoadSettings();
+        }
+
         private List<ActionModel> LoadActionList()
         {
             string path = AppContext.BaseDirectory + "\\ActionList.json";
@@ -499,12 +529,31 @@ namespace WindowsShutdownHelper
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            string json = e.WebMessageAsJson;
-            var doc = JsonDocument.Parse(json);
-            string msgJson = doc.RootElement.GetString();
-            var msg = JsonDocument.Parse(msgJson);
-            string type = msg.RootElement.GetProperty("type").GetString();
-            var data = msg.RootElement.GetProperty("data");
+            string msgJson;
+            try
+            {
+                msgJson = e.TryGetWebMessageAsString();
+            }
+            catch
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(msgJson))
+            {
+                return;
+            }
+
+            using var msg = JsonDocument.Parse(msgJson);
+            if (!msg.RootElement.TryGetProperty("type", out JsonElement typeElement))
+            {
+                return;
+            }
+
+            string type = typeElement.GetString();
+            JsonElement data = msg.RootElement.TryGetProperty("data", out JsonElement payload)
+                ? payload
+                : default;
 
             switch (type)
             {
@@ -842,9 +891,10 @@ namespace WindowsShutdownHelper
                 BluetoothThresholdSeconds = data.GetProperty("bluetoothThresholdSeconds").GetInt32()
             };
 
-            string currentLang = LoadSettings().Language;
+            string currentLang = _cachedSettings?.Language ?? "auto";
             SettingsStorage.Save(newSettings);
             _cachedSettings = newSettings;
+            Logger.UpdateSettings(newSettings);
 
             // Update tray menu renderer and form BackColor based on theme
             bool isDark = DetermineIfDark(newSettings.Theme);
@@ -861,6 +911,11 @@ namespace WindowsShutdownHelper
             if (newSettings.IsCountdownNotifierEnabled)
             {
                 NotifySystem.PrewarmCountdownNotifier();
+            }
+
+            if (!string.Equals(currentLang, newSettings.Language, StringComparison.Ordinal))
+            {
+                LanguagePayloadCache.Invalidate();
             }
 
             if (currentLang != newSettings.Language)
@@ -887,28 +942,26 @@ namespace WindowsShutdownHelper
 
         private void HandleLoadSettings()
         {
-            PostMessage("settingsLoaded", LoadSettings());
+            PostMessage("settingsLoaded", _cachedSettings ?? LoadSettings());
         }
 
         private void HandleLoadLogs()
         {
-            string logPath = AppContext.BaseDirectory + "\\Logs.json";
-            if (File.Exists(logPath))
+#if DEBUG
+            long perfStart = DebugPerformanceTracker.Start();
+#endif
+            var rawLogs = Logger.GetRecentLogs(250);
+            var logs = rawLogs.Select(l => new
             {
-                var rawLogs = JsonSerializer.Deserialize<List<LogSystem>>(File.ReadAllText(logPath));
-                var logs = rawLogs.OrderByDescending(a => a.ActionExecutedDate).Take(250)
-                    .Select(l => new
-                    {
-                        actionExecutedDate = l.ActionExecutedDate,
-                        actionType = TranslateLogAction(l.ActionType),
-                        actionTypeRaw = l.ActionType
-                    }).ToList();
-                PostMessage("logsLoaded", logs);
-            }
-            else
-            {
-                PostMessage("logsLoaded", new List<object>());
-            }
+                actionExecutedDate = l.ActionExecutedDate,
+                actionType = TranslateLogAction(l.ActionType),
+                actionTypeRaw = l.ActionType
+            }).ToList();
+
+            PostMessage("logsLoaded", logs);
+#if DEBUG
+            DebugPerformanceTracker.Record("MainForm.HandleLoadLogs", perfStart);
+#endif
         }
 
         private string TranslateLogAction(string raw)
@@ -928,8 +981,7 @@ namespace WindowsShutdownHelper
 
         private void HandleClearLogs()
         {
-            string logPath = AppContext.BaseDirectory + "\\Logs.json";
-            if (File.Exists(logPath)) File.Delete(logPath);
+            Logger.Clear();
 
             PostMessage("showToast", new
             {
@@ -1008,21 +1060,38 @@ namespace WindowsShutdownHelper
         private void HandleStartBluetoothScan()
         {
             BluetoothScanner.StartDiscoveryScan();
-
-            _bluetoothScanTimer = new Timer { Interval = 1000 };
-            _bluetoothScanTimer.Tick += (s, e) =>
+            if (_bluetoothScanTimer != null)
             {
-                var devices = BluetoothScanner.GetDiscoveredDevices();
-                var list = devices.Select(d => new
-                {
-                    mac = d.MacAddress,
-                    name = d.LocalName ?? "",
-                    rssi = d.RssiDbm
-                }).ToList();
+                return;
+            }
 
-                PostMessage("bluetoothScanResult", list);
-            };
+            _lastBluetoothDiscoveryVersion = -1;
+            _bluetoothScanTimer = new Timer { Interval = 1000 };
+            _bluetoothScanTimer.Tick += BluetoothScanTimerTick;
             _bluetoothScanTimer.Start();
+        }
+
+        private void BluetoothScanTimerTick(object sender, EventArgs e)
+        {
+            if (!BluetoothScanner.TryGetDiscoveredDevicesIfChanged(
+                    ref _lastBluetoothDiscoveryVersion,
+                    out List<BleDeviceInfo> devices))
+            {
+                return;
+            }
+
+            var list = new List<object>(devices.Count);
+            foreach (BleDeviceInfo device in devices)
+            {
+                list.Add(new
+                {
+                    mac = device.MacAddress,
+                    name = device.LocalName ?? string.Empty,
+                    rssi = device.RssiDbm
+                });
+            }
+
+            PostMessage("bluetoothScanResult", list);
         }
 
         private void HandleStopBluetoothScan()
@@ -1030,6 +1099,7 @@ namespace WindowsShutdownHelper
             _bluetoothScanTimer?.Stop();
             _bluetoothScanTimer?.Dispose();
             _bluetoothScanTimer = null;
+            _lastBluetoothDiscoveryVersion = -1;
             BluetoothScanner.StopDiscoveryScan();
         }
 
@@ -1053,11 +1123,17 @@ namespace WindowsShutdownHelper
 
         public void WriteJsonToActionList()
         {
-            JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true,
-                ActionList.ToList());
+#if DEBUG
+            long perfStart = DebugPerformanceTracker.Start();
+#endif
+            JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true, ActionList);
+            RebuildActionRuntimeStates();
             CleanupActionExecutionState();
             EnsureBluetoothMonitoring();
             RefreshActionsInUI();
+#if DEBUG
+            DebugPerformanceTracker.Record("MainForm.WriteJsonToActionList", perfStart);
+#endif
         }
 
         private void CleanupActionExecutionState()
@@ -1073,6 +1149,74 @@ namespace WindowsShutdownHelper
                     _certainTimeLastExecutionDates.Remove(key);
                 }
             }
+
+            NotifySystem.CleanupState(ActionList);
+        }
+
+        private void RebuildActionRuntimeStates()
+        {
+            _actionRuntimeStates.Clear();
+            foreach (ActionModel action in ActionList)
+            {
+                string key = BuildActionExecutionKey(action);
+                _actionRuntimeStates[key] = BuildActionRuntimeState(action, key);
+            }
+        }
+
+        private ActionRuntimeState BuildActionRuntimeState(ActionModel action, string actionKey)
+        {
+            var state = new ActionRuntimeState
+            {
+                ExecutionKey = actionKey ?? string.Empty
+            };
+
+            if (TryGetSystemIdleSeconds(action, out uint idleSeconds))
+            {
+                state.IdleSeconds = idleSeconds;
+                state.HasIdleSeconds = true;
+            }
+
+            if (TryParseFromNowValue(action, out DateTime fromNowTarget))
+            {
+                state.FromNowTarget = fromNowTarget;
+                state.HasFromNowTarget = true;
+            }
+
+            if (action != null &&
+                !string.IsNullOrWhiteSpace(action.Value) &&
+                action.TriggerType == Config.TriggerTypes.CertainTime &&
+                DateTime.TryParseExact(
+                    action.Value,
+                    "HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime parsedTime))
+            {
+                state.CertainTimeOfDay = parsedTime.TimeOfDay;
+                state.HasCertainTime = true;
+            }
+
+            if (action != null &&
+                action.TriggerType == Config.TriggerTypes.BluetoothNotReachable &&
+                !string.IsNullOrWhiteSpace(action.Value))
+            {
+                state.BluetoothAddress = BluetoothScanner.MacStringToUlong(action.Value);
+            }
+
+            return state;
+        }
+
+        private ActionRuntimeState GetOrCreateActionRuntimeState(ActionModel action)
+        {
+            string key = BuildActionExecutionKey(action);
+            if (_actionRuntimeStates.TryGetValue(key, out ActionRuntimeState state))
+            {
+                return state;
+            }
+
+            state = BuildActionRuntimeState(action, key);
+            _actionRuntimeStates[key] = state;
+            return state;
         }
 
         private void RefreshActionsInUI()
@@ -1131,64 +1275,86 @@ namespace WindowsShutdownHelper
 
         // =============== Timer & Action Execution ===============
 
-        private void DoAction(ActionModel action, uint idleTimeMin)
+        private ActionExecutionResult DoAction(
+            ActionModel action,
+            ActionRuntimeState state,
+            uint idleTimeSec,
+            DateTime now)
         {
-            if (action == null) return;
-            string actionKey = BuildActionExecutionKey(action);
+            if (action == null || state == null)
+            {
+                return ActionExecutionResult.None;
+            }
+
+            string actionKey = state.ExecutionKey;
+            ActionExecutionResult result = ActionExecutionResult.None;
 
             if (action.TriggerType == Config.TriggerTypes.SystemIdle)
             {
-                if (!TryGetSystemIdleSeconds(action, out uint actionValueSeconds)) return;
-                if (idleTimeMin >= actionValueSeconds && !_executedIdleActionKeys.Contains(actionKey))
+                if (!state.HasIdleSeconds)
                 {
-                    _executedIdleActionKeys.Add(actionKey);
-                    Actions.DoActionByTypes(action);
+                    return ActionExecutionResult.None;
                 }
-                return;
+
+                if (idleTimeSec >= state.IdleSeconds && _executedIdleActionKeys.Add(actionKey))
+                {
+                    Actions.DoActionByTypes(action);
+                    return ActionExecutionResult.Executed;
+                }
+
+                return ActionExecutionResult.None;
             }
 
             if (action.TriggerType == Config.TriggerTypes.CertainTime &&
-                ShouldExecuteCertainTimeAction(action, actionKey, DateTime.Now))
+                ShouldExecuteCertainTimeAction(state, actionKey, now))
             {
                 if (IsSkippedCertainTimeAction == false)
                 {
                     Actions.DoActionByTypes(action);
+                    result |= ActionExecutionResult.Executed;
                 }
                 else
                 {
                     IsSkippedCertainTimeAction = false;
                 }
 
-                _certainTimeLastExecutionDates[actionKey] = DateTime.Now.Date;
+                _certainTimeLastExecutionDates[actionKey] = now.Date;
             }
 
             if (action.TriggerType == Config.TriggerTypes.FromNow &&
-                TryParseFromNowValue(action, out DateTime targetTime) &&
-                DateTime.Now >= targetTime)
+                state.HasFromNowTarget &&
+                now >= state.FromNowTarget)
             {
                 Actions.DoActionByTypes(action);
-                ActionList.Remove(action);
-                WriteJsonToActionList();
+                result |= ActionExecutionResult.Executed |
+                          ActionExecutionResult.RemoveAction |
+                          ActionExecutionResult.NeedsPersist;
             }
 
             if (action.TriggerType == Config.TriggerTypes.BluetoothNotReachable)
             {
-                if (string.IsNullOrWhiteSpace(action.Value)) return;
+                if (state.BluetoothAddress == 0)
+                {
+                    return result;
+                }
 
                 int threshold = (_cachedSettings?.BluetoothThresholdSeconds > 0) ? _cachedSettings.BluetoothThresholdSeconds : 5;
-                bool reachable = BluetoothScanner.IsDeviceReachable(action.Value, threshold);
+                bool reachable = BluetoothScanner.IsDeviceReachable(state.BluetoothAddress, threshold, now);
 
                 if (reachable)
                 {
                     _executedBluetoothActionKeys.Remove(actionKey);
                 }
-                else if (BluetoothScanner.HasDeviceEverBeenSeen(action.Value) &&
+                else if (BluetoothScanner.HasDeviceEverBeenSeen(state.BluetoothAddress) &&
                          !_executedBluetoothActionKeys.Contains(actionKey))
                 {
                     _executedBluetoothActionKeys.Add(actionKey);
                     Actions.DoActionByTypes(action);
+                    result |= ActionExecutionResult.Executed;
                 }
             }
+
+            return result;
         }
 
         private static string BuildActionExecutionKey(ActionModel action)
@@ -1201,24 +1367,14 @@ namespace WindowsShutdownHelper
                    (action.Value ?? string.Empty);
         }
 
-        private bool ShouldExecuteCertainTimeAction(ActionModel action, string actionKey, DateTime now)
+        private bool ShouldExecuteCertainTimeAction(ActionRuntimeState state, string actionKey, DateTime now)
         {
-            if (action == null || string.IsNullOrWhiteSpace(action.Value))
+            if (state == null || !state.HasCertainTime)
             {
                 return false;
             }
 
-            if (!DateTime.TryParseExact(
-                    action.Value,
-                    "HH:mm:ss",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out DateTime parsed))
-            {
-                return false;
-            }
-
-            DateTime scheduledTime = now.Date.Add(parsed.TimeOfDay);
+            DateTime scheduledTime = now.Date.Add(state.CertainTimeOfDay);
             if (now < scheduledTime)
             {
                 return false;
@@ -1286,12 +1442,17 @@ namespace WindowsShutdownHelper
 
         private void TimerTick(object sender, EventArgs e)
         {
+#if DEBUG
+            long perfStart = DebugPerformanceTracker.Start();
+#endif
+            DateTime now = DateTime.Now;
+
             // Update time in UI
-            string timeText = (Language.MainStatusBarCurrentTime ?? "Time") + " : " + DateTime.Now + "  |  Build Id: " + BuildInfo.CommitId;
+            string timeText = (Language.MainStatusBarCurrentTime ?? "Time") + " : " + now + "  |  Build Id: " + BuildInfo.CommitId;
             PostMessage("updateTime", timeText);
 
             // Check pause expiration
-            if (_isPaused && _pauseUntilTime.HasValue && DateTime.Now >= _pauseUntilTime.Value)
+            if (_isPaused && _pauseUntilTime.HasValue && now >= _pauseUntilTime.Value)
             {
                 _isPaused = false;
                 _pauseUntilTime = null;
@@ -1309,30 +1470,75 @@ namespace WindowsShutdownHelper
             if (_isPaused)
             {
                 SendPauseStatus();
+#if DEBUG
+                DebugPerformanceTracker.Record("MainForm.TimerTick", perfStart);
+#endif
                 return;
             }
 
-            uint idleTimeMin = SystemIdleDetector.GetLastInputTime();
+            uint idleTimeSec = SystemIdleDetector.GetLastInputTime();
 
-            if (idleTimeMin == 0)
+            if (idleTimeSec == 0)
             {
                 NotifySystem.ResetIdleNotifications();
                 _executedIdleActionKeys.Clear();
-                Timer.Stop();
-                Timer.Start();
             }
 
-            if (IsDeletedFromNotifier)
+            if (_cachedSettings == null)
+            {
+                _cachedSettings = Config.SettingsINI.DefaulSettingFile();
+                Logger.UpdateSettings(_cachedSettings);
+            }
+
+            Settings runtimeSettings = _cachedSettings;
+            bool requiresPersist = false;
+            List<int> removeIndices = null;
+
+            for (int index = 0; index < ActionList.Count; ++index)
+            {
+                ActionModel action = ActionList[index];
+                ActionRuntimeState state = GetOrCreateActionRuntimeState(action);
+                ActionExecutionResult actionResult = DoAction(action, state, idleTimeSec, now);
+
+                if ((actionResult & ActionExecutionResult.RemoveAction) != 0)
+                {
+                    if (removeIndices == null)
+                    {
+                        removeIndices = new List<int>();
+                    }
+
+                    removeIndices.Add(index);
+                }
+
+                if ((actionResult & ActionExecutionResult.NeedsPersist) != 0)
+                {
+                    requiresPersist = true;
+                }
+
+                if ((actionResult & ActionExecutionResult.RemoveAction) == 0)
+                {
+                    NotifySystem.ShowNotification(action, idleTimeSec, runtimeSettings, now);
+                }
+            }
+
+            if (removeIndices != null)
+            {
+                for (int i = removeIndices.Count - 1; i >= 0; --i)
+                {
+                    ActionList.RemoveAt(removeIndices[i]);
+                }
+
+                requiresPersist = true;
+            }
+
+            if (requiresPersist)
             {
                 WriteJsonToActionList();
-                IsDeletedFromNotifier = false;
             }
 
-            foreach (ActionModel action in ActionList.ToList())
-            {
-                DoAction(action, idleTimeMin);
-                NotifySystem.ShowNotification(action, idleTimeMin);
-            }
+#if DEBUG
+            DebugPerformanceTracker.Record("MainForm.TimerTick", perfStart);
+#endif
         }
 
         // =============== System Tray & Window Events ===============
@@ -1360,7 +1566,7 @@ namespace WindowsShutdownHelper
         {
             StopSubWindowPrewarm();
 
-            Settings = LoadSettings();
+            Settings = _cachedSettings ?? LoadSettings();
             if (Settings.RunInTaskbarWhenClosed)
             {
                 e.Cancel = true;

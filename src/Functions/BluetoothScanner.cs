@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Enumeration;
 
@@ -30,6 +31,7 @@ namespace WindowsShutdownHelper.Functions
 
         private static bool _isDiscovering;
         private static bool _isMonitoring;
+        private static int _discoveryVersion;
 
         public static event Action<BleDeviceInfo> DeviceDiscovered;
 
@@ -45,6 +47,7 @@ namespace WindowsShutdownHelper.Functions
                 if (_isDiscovering) return;
 
                 _discoveredDevices.Clear();
+                Interlocked.Increment(ref _discoveryVersion);
 
                 // BLE advertisement watcher
                 _discoveryWatcher = new BluetoothLEAdvertisementWatcher
@@ -103,6 +106,7 @@ namespace WindowsShutdownHelper.Functions
                 }
 
                 _isDiscovering = false;
+                Interlocked.Increment(ref _discoveryVersion);
             }
         }
 
@@ -112,6 +116,20 @@ namespace WindowsShutdownHelper.Functions
                 .Where(d => !string.IsNullOrEmpty(d.LocalName))
                 .OrderByDescending(d => d.RssiDbm)
                 .ToList();
+        }
+
+        public static bool TryGetDiscoveredDevicesIfChanged(ref int knownVersion, out List<BleDeviceInfo> devices)
+        {
+            int latestVersion = Volatile.Read(ref _discoveryVersion);
+            if (latestVersion == knownVersion)
+            {
+                devices = null;
+                return false;
+            }
+
+            knownVersion = latestVersion;
+            devices = GetDiscoveredDevices();
+            return true;
         }
 
         private static void OnDiscoveryReceived(
@@ -129,19 +147,39 @@ namespace WindowsShutdownHelper.Functions
                 LastSeen = DateTime.Now
             };
 
+            bool changed = false;
             _discoveredDevices.AddOrUpdate(
                 args.BluetoothAddress,
-                info,
+                _ =>
+                {
+                    changed = true;
+                    return info;
+                },
                 (key, existing) =>
                 {
-                    existing.RssiDbm = info.RssiDbm;
+                    if (existing.RssiDbm != info.RssiDbm)
+                    {
+                        existing.RssiDbm = info.RssiDbm;
+                        changed = true;
+                    }
+
                     existing.LastSeen = info.LastSeen;
                     if (!string.IsNullOrEmpty(name))
                     {
+                        if (!string.Equals(existing.LocalName, name, StringComparison.Ordinal))
+                        {
+                            changed = true;
+                        }
+
                         existing.LocalName = name;
                     }
                     return existing;
                 });
+
+            if (changed)
+            {
+                Interlocked.Increment(ref _discoveryVersion);
+            }
 
             if (!string.IsNullOrEmpty(name))
             {
@@ -184,18 +222,33 @@ namespace WindowsShutdownHelper.Functions
                 LastSeen = DateTime.Now
             };
 
+            bool changed = false;
             _discoveredDevices.AddOrUpdate(
                 macLong,
-                deviceInfo,
+                _ =>
+                {
+                    changed = true;
+                    return deviceInfo;
+                },
                 (key, existing) =>
                 {
                     if (!string.IsNullOrEmpty(name))
                     {
+                        if (!string.Equals(existing.LocalName, name, StringComparison.Ordinal))
+                        {
+                            changed = true;
+                        }
+
                         existing.LocalName = name;
                     }
                     existing.LastSeen = DateTime.Now;
                     return existing;
                 });
+
+            if (changed)
+            {
+                Interlocked.Increment(ref _discoveryVersion);
+            }
 
             DeviceDiscovered?.Invoke(deviceInfo);
         }
@@ -243,19 +296,29 @@ namespace WindowsShutdownHelper.Functions
         {
             ulong address = MacStringToUlong(macAddress);
             if (address == 0) return false;
+            return IsDeviceReachable(address, thresholdSeconds, DateTime.Now);
+        }
 
-            if (!_monitorLastSeen.TryGetValue(address, out DateTime lastSeen))
+        public static bool IsDeviceReachable(ulong bluetoothAddress, int thresholdSeconds, DateTime now)
+        {
+            if (bluetoothAddress == 0) return false;
+            if (!_monitorLastSeen.TryGetValue(bluetoothAddress, out DateTime lastSeen))
             {
                 return false;
             }
 
-            return (DateTime.Now - lastSeen).TotalSeconds < thresholdSeconds;
+            return (now - lastSeen).TotalSeconds < thresholdSeconds;
         }
 
         public static bool HasDeviceEverBeenSeen(string macAddress)
         {
             ulong address = MacStringToUlong(macAddress);
-            return address != 0 && _monitorLastSeen.ContainsKey(address);
+            return HasDeviceEverBeenSeen(address);
+        }
+
+        public static bool HasDeviceEverBeenSeen(ulong bluetoothAddress)
+        {
+            return bluetoothAddress != 0 && _monitorLastSeen.ContainsKey(bluetoothAddress);
         }
 
         private static void OnMonitorReceived(

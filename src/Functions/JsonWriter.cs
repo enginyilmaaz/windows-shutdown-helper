@@ -1,21 +1,28 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Text.Json;
 
 namespace WindowsShutdownHelper.Functions
 {
     public class JsonWriter
     {
+        private static readonly JsonSerializerOptions IndentedWriteOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true
+        };
+
+        private static readonly JsonSerializerOptions CompactWriteOptions = new JsonSerializerOptions
+        {
+            WriteIndented = false
+        };
+
         public static void WriteJson(string fileNameWithExtension, bool writeIndented, object willWriteListOrClass)
         {
-            JsonSerializerOptions options = new JsonSerializerOptions
-            {
-                WriteIndented = writeIndented
-            };
+            string json = JsonSerializer.Serialize(
+                willWriteListOrClass,
+                writeIndented ? IndentedWriteOptions : CompactWriteOptions);
 
-            string json = JsonSerializer.Serialize(willWriteListOrClass, options);
-            StreamWriter sw = new StreamWriter(fileNameWithExtension, false);
-            sw.WriteLine(json);
-            sw.Close();
+            File.WriteAllText(fileNameWithExtension, json + Environment.NewLine);
         }
     }
 }

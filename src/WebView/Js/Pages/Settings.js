@@ -1,6 +1,23 @@
 // Settings Page
 window.SettingsPage = {
     _languageList: [],
+    _cleanupFns: [],
+
+    _registerCleanup(fn) {
+        if (typeof fn === 'function') {
+            this._cleanupFns.push(fn);
+        }
+    },
+
+    _disposeHandlers() {
+        while (this._cleanupFns.length > 0) {
+            var fn = this._cleanupFns.pop();
+            try {
+                fn();
+            } catch (_) {
+            }
+        }
+    },
 
     render() {
         var L = Bridge.lang.bind(Bridge);
@@ -73,14 +90,19 @@ window.SettingsPage = {
         '</div>';
     },
 
+    beforeLeave() {
+        this._disposeHandlers();
+    },
+
     afterRender() {
         var self = this;
+        self._disposeHandlers();
 
         // Request settings and language list from C#
         Bridge.send('loadSettings', {});
         Bridge.send('getLanguageList', {});
 
-        Bridge.on('settingsLoaded', function (s) {
+        var offSettingsLoaded = Bridge.on('settingsLoaded', function (s) {
             var el;
             el = document.getElementById('set-theme');
             if (el) el.value = s.theme || 'system';
@@ -97,8 +119,9 @@ window.SettingsPage = {
             el = document.getElementById('set-bt-threshold');
             if (el) el.value = s.bluetoothThresholdSeconds || 5;
         });
+        self._registerCleanup(offSettingsLoaded);
 
-        Bridge.on('languageList', function (list) {
+        var offLanguageList = Bridge.on('languageList', function (list) {
             self._languageList = list || [];
             var sel = document.getElementById('set-lang');
             if (!sel) return;
@@ -113,13 +136,20 @@ window.SettingsPage = {
                 sel.appendChild(opt);
             }
         });
+        self._registerCleanup(offLanguageList);
 
         // Live theme preview
-        document.getElementById('set-theme').addEventListener('change', function () {
+        var themeEl = document.getElementById('set-theme');
+        var onThemeChange = function () {
             Bridge.applyTheme(this.value);
+        };
+        themeEl.addEventListener('change', onThemeChange);
+        self._registerCleanup(function () {
+            themeEl.removeEventListener('change', onThemeChange);
         });
 
-        document.getElementById('set-save').addEventListener('click', function () {
+        var saveEl = document.getElementById('set-save');
+        var onSaveClick = function () {
             Bridge.send('saveSettings', {
                 logsEnabled: document.getElementById('set-logs').checked,
                 startWithWindows: document.getElementById('set-startup').checked,
@@ -130,10 +160,19 @@ window.SettingsPage = {
                 language: document.getElementById('set-lang').value,
                 theme: document.getElementById('set-theme').value
             });
+        };
+        saveEl.addEventListener('click', onSaveClick);
+        self._registerCleanup(function () {
+            saveEl.removeEventListener('click', onSaveClick);
         });
 
-        document.getElementById('set-cancel').addEventListener('click', function () {
+        var cancelEl = document.getElementById('set-cancel');
+        var onCancelClick = function () {
             Bridge.send('closeWindow', {});
+        };
+        cancelEl.addEventListener('click', onCancelClick);
+        self._registerCleanup(function () {
+            cancelEl.removeEventListener('click', onCancelClick);
         });
     }
 };

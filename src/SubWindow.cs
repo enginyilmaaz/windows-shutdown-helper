@@ -228,16 +228,11 @@ namespace WindowsShutdownHelper
         {
             if (!_webViewReady) return;
 
-            var langDict = new Dictionary<string, string>();
-            foreach (PropertyInfo prop in typeof(Language).GetProperties())
-            {
-                var val = prop.GetValue(MainForm.Language);
-                if (val != null) langDict[prop.Name] = val.ToString();
-            }
-
+            var langDict = LanguagePayloadCache.Get(MainForm.Language);
             var displayActions = GetTranslatedActions();
 
-            var settingsObj = LoadSettings();
+            var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+            var settingsObj = main?.GetCachedSettingsOrDefault() ?? LoadSettings();
             var initData = new
             {
                 language = langDict,
@@ -276,12 +271,31 @@ namespace WindowsShutdownHelper
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            string json = e.WebMessageAsJson;
-            var doc = JsonDocument.Parse(json);
-            string msgJson = doc.RootElement.GetString();
-            var msg = JsonDocument.Parse(msgJson);
-            string type = msg.RootElement.GetProperty("type").GetString();
-            var data = msg.RootElement.GetProperty("data");
+            string msgJson;
+            try
+            {
+                msgJson = e.TryGetWebMessageAsString();
+            }
+            catch
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(msgJson))
+            {
+                return;
+            }
+
+            using var msg = JsonDocument.Parse(msgJson);
+            if (!msg.RootElement.TryGetProperty("type", out JsonElement typeElement))
+            {
+                return;
+            }
+
+            string type = typeElement.GetString();
+            JsonElement data = msg.RootElement.TryGetProperty("data", out JsonElement payload)
+                ? payload
+                : default;
 
             switch (type)
             {
@@ -562,18 +576,15 @@ namespace WindowsShutdownHelper
 
         private void WriteActionList()
         {
-            JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true,
-                MainForm.ActionList.ToList());
-
-            // Refresh in this window
-            PostMessage("refreshActions", GetTranslatedActions());
-
-            // Broadcast to main form
             var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
             if (main != null)
             {
                 main.WriteJsonToActionList();
+                return;
             }
+
+            JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true, MainForm.ActionList);
+            PostMessage("refreshActions", GetTranslatedActions());
         }
 
         private void HandleSaveSettings(JsonElement data)
@@ -589,8 +600,11 @@ namespace WindowsShutdownHelper
                 Theme = data.GetProperty("theme").GetString()
             };
 
-            string currentLang = LoadSettings().Language;
+            var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+            string currentLang = main?.GetCachedSettingsOrDefault()?.Language ?? LoadSettings().Language;
             SettingsStorage.Save(newSettings);
+            Logger.UpdateSettings(newSettings);
+            main?.UpdateCachedSettings(newSettings);
 
             if (newSettings.StartWithWindows)
                 StartWithWindows.AddStartup(MainForm.Language.SettingsFormAddStartupAppName ?? "Windows Shutdown Helper");
@@ -600,6 +614,11 @@ namespace WindowsShutdownHelper
             if (newSettings.IsCountdownNotifierEnabled)
             {
                 NotifySystem.PrewarmCountdownNotifier();
+            }
+
+            if (!string.Equals(currentLang, newSettings.Language, StringComparison.Ordinal))
+            {
+                LanguagePayloadCache.Invalidate();
             }
 
             if (currentLang != newSettings.Language)
@@ -626,34 +645,25 @@ namespace WindowsShutdownHelper
 
         private void HandleLoadSettings()
         {
-            PostMessage("settingsLoaded", LoadSettings());
+            var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+            PostMessage("settingsLoaded", main?.GetCachedSettingsOrDefault() ?? LoadSettings());
         }
 
         private void HandleLoadLogs()
         {
-            string logPath = AppContext.BaseDirectory + "\\Logs.json";
-            if (File.Exists(logPath))
+            var rawLogs = Logger.GetRecentLogs(250);
+            var logs = rawLogs.Select(l => new
             {
-                var rawLogs = JsonSerializer.Deserialize<List<LogSystem>>(File.ReadAllText(logPath));
-                var logs = rawLogs.OrderByDescending(a => a.ActionExecutedDate).Take(250)
-                    .Select(l => new
-                    {
-                        actionExecutedDate = l.ActionExecutedDate,
-                        actionType = TranslateLogAction(l.ActionType),
-                        actionTypeRaw = l.ActionType
-                    }).ToList();
-                PostMessage("logsLoaded", logs);
-            }
-            else
-            {
-                PostMessage("logsLoaded", new List<object>());
-            }
+                actionExecutedDate = l.ActionExecutedDate,
+                actionType = TranslateLogAction(l.ActionType),
+                actionTypeRaw = l.ActionType
+            }).ToList();
+            PostMessage("logsLoaded", logs);
         }
 
         private void HandleClearLogs()
         {
-            string logPath = AppContext.BaseDirectory + "\\Logs.json";
-            if (File.Exists(logPath)) File.Delete(logPath);
+            Logger.Clear();
 
             PostMessage("showToast", new
             {

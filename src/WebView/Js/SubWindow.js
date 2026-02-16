@@ -105,6 +105,13 @@
         wrap.innerHTML = '<div class="table-empty">' + (L('MessageTitleError') || 'Error') + '</div>';
     }
 
+    function disposePageHandlers(page) {
+        var pageObject = getPage(page);
+        if (pageObject && typeof pageObject.beforeLeave === 'function') {
+            pageObject.beforeLeave();
+        }
+    }
+
     function renderPage() {
         var container = document.getElementById('page-container');
         if (!container) return;
@@ -112,6 +119,7 @@
         container.innerHTML = '<div class="table-empty">' + getLoadingText() + '</div>';
         var token = ++navigationToken;
         var targetPage = pageName;
+        disposePageHandlers(targetPage);
 
         ensurePageLoaded(targetPage)
             .then(function (page) {
@@ -133,6 +141,7 @@
 
     function navigate(page) {
         if (!pageConfig[page]) return;
+        disposePageHandlers(pageName);
         pageName = page;
         applyLanguage();
         renderPage();
