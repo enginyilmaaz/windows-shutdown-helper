@@ -7,6 +7,10 @@ on:
       - master
       - dev
 
+concurrency:
+  group: build-and-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -31,22 +35,62 @@ jobs:
       - name: Determine version and commit info
         id: version
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $commitHash = git rev-parse --short=6 HEAD
           echo "commit_short=$commitHash" >> $env:GITHUB_OUTPUT
 
           if ("${{ github.ref_name }}" -eq "master") {
-            $latestTag = git tag -l "v*" --sort=-v:refname | Select-Object -First 1
+            git fetch --tags --force
+
+            $semverTags = git tag -l "v*" |
+              Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
+              Sort-Object { [version]($_ -replace '^v', '') } -Descending
+
+            $latestTag = $semverTags | Select-Object -First 1
             if ($latestTag) {
               $ver = $latestTag -replace '^v', ''
               $parts = $ver.Split('.')
               $major = [int]$parts[0]
               $minor = [int]$parts[1]
               $patch = [int]$parts[2] + 1
-              $newVersion = "$major.$minor.$patch"
             } else {
-              $newVersion = "1.0.1"
+              $major = 1
+              $minor = 0
+              $patch = 1
             }
+
+            function Test-VersionExists([string]$version) {
+              $tag = "v$version"
+
+              $remoteTag = git ls-remote --tags origin "refs/tags/$tag"
+              if (-not [string]::IsNullOrWhiteSpace($remoteTag)) {
+                return $true
+              }
+
+              $repo = "${{ github.repository }}"
+              $url = "https://api.github.com/repos/$repo/releases/tags/$tag"
+              $headers = @{
+                Authorization = "Bearer $env:GITHUB_TOKEN"
+                Accept = "application/vnd.github+json"
+                "X-GitHub-Api-Version" = "2022-11-28"
+              }
+
+              try {
+                Invoke-RestMethod -Method Get -Uri $url -Headers $headers -ErrorAction Stop | Out-Null
+                return $true
+              } catch {
+                return $false
+              }
+            }
+
+            $newVersion = "$major.$minor.$patch"
+            while (Test-VersionExists $newVersion) {
+              $patch = $patch + 1
+              $newVersion = "$major.$minor.$patch"
+            }
+
             echo "version=$newVersion" >> $env:GITHUB_OUTPUT
             echo "is_release=true" >> $env:GITHUB_OUTPUT
           } else {
