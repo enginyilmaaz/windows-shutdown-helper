@@ -142,8 +142,58 @@
 
     window.App = {
         navigate: navigate,
-        closeModal: function () { }
+        openEditActionModal: function (editableAction) {
+            if (!editableAction || editableAction.index < 0) return;
+
+            ensurePageLoaded('main').then(function (mainPage) {
+                if (!mainPage || !mainPage.renderForm || !mainPage.afterRenderForm) return;
+
+                var modalOverlay = document.getElementById('modal-overlay');
+                var modalTitle = document.getElementById('modal-title');
+                var modalBody = document.getElementById('modal-body');
+                if (!modalOverlay || !modalTitle || !modalBody) return;
+
+                var L = Bridge.lang.bind(Bridge);
+                modalTitle.textContent = L('ModalTitleEditAction') || (L('ContextMenuStripMainGridEditSelectedAction') || 'Edit Action');
+                modalBody.innerHTML = mainPage.renderForm({ mode: 'edit' });
+                mainPage.afterRenderForm(modalBody, {
+                    mode: 'edit',
+                    index: editableAction.index,
+                    initialData: editableAction
+                });
+
+                modalOverlay.classList.remove('hidden');
+            }).catch(function () { });
+        },
+        closeModal: function () {
+            var modalOverlay = document.getElementById('modal-overlay');
+            if (modalOverlay) {
+                modalOverlay.classList.add('hidden');
+            }
+        }
     };
+
+    var modalClose = document.getElementById('modal-close');
+    if (modalClose) {
+        modalClose.addEventListener('click', function () {
+            window.App.closeModal();
+        });
+    }
+
+    var modalOverlay = document.getElementById('modal-overlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', function (e) {
+            if (e.target === modalOverlay) {
+                window.App.closeModal();
+            }
+        });
+    }
+
+    Bridge.on('updateActionResult', function (data) {
+        if (data && data.success) {
+            window.App.closeModal();
+        }
+    });
 
     // Time update
     Bridge.on('updateTime', function (data) {
