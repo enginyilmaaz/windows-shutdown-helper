@@ -51,6 +51,7 @@
         public string messageContent_actionChoose { get; set; }
         public string messageContent_actionCreated { get; set; }
         public string messageContent_maxActionWarn { get; set; }
+        public string messageContent_idleActionConflict { get; set; }
         public string messageContent_another { get; set; }
         public string messageContent_windowAlredyOpen { get; set; }
         public string settingsForm_Name { get; set; }

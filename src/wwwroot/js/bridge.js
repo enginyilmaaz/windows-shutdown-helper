@@ -95,6 +95,9 @@ if (window.chrome && window.chrome.webview) {
             case 'themeChanged':
                 Bridge.applyTheme(msg.data);
                 break;
+            case 'addActionResult':
+                Bridge._emit('addActionResult', msg.data);
+                break;
         }
     });
 }

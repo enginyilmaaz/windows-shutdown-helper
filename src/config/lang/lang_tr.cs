@@ -43,6 +43,8 @@
                 messageContent_actionCreated = "Görev ekleme başarılı",
                 messageContent_actionChoose = "Eksik seçim yaptınız, düzeltin",
                 messageContent_maxActionWarn = "En fazla 5 görev oluşturabilirsin",
+                messageContent_idleActionConflict =
+                    "Bu boşta kalma görevi mevcut görevlerle çakışıyor. Önce çakışan görevi silin veya süreyi değiştirin.",
                 messageContent_datagridMain_actionChoose = "Görev seçmediniz",
                 messageContent_windowAlredyOpen = "penceresi zaten açık",
                 settingsForm_Name = "Ayarlar",

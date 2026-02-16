@@ -91,9 +91,6 @@ window.MainPage = {
                 timeUnit: unit,
                 time: time
             });
-
-            // Close modal after adding
-            App.closeModal();
         });
     },
 

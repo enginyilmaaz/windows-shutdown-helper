@@ -43,6 +43,8 @@ namespace WindowsShutdownHelper.lang
                 messageContent_actionCreated = "Azione creata con successo",
                 messageContent_actionChoose = "Selezione incompleta, correggere",
                 messageContent_maxActionWarn = "Puoi creare al massimo 5 azioni",
+                messageContent_idleActionConflict =
+                    "Questa azione di inattività è in conflitto con azioni esistenti. Elimina l'azione in conflitto o modifica la durata.",
                 messageContent_datagridMain_actionChoose = "Non hai selezionato un'azione",
                 messageContent_another = "Altro",
                 messageContent_windowAlredyOpen = "la finestra è già aperta",

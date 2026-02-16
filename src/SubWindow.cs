@@ -332,6 +332,7 @@ namespace WindowsShutdownHelper
                     type = "warn",
                     duration = 2000
                 });
+                PostMessage("addActionResult", new { success = false });
                 return;
             }
 
@@ -344,6 +345,7 @@ namespace WindowsShutdownHelper
                     type = "warn",
                     duration = 2000
                 });
+                PostMessage("addActionResult", new { success = false });
                 return;
             }
 
@@ -390,6 +392,19 @@ namespace WindowsShutdownHelper
                 }
             }
 
+            if (!actionValidation.TryValidateActionForAdd(newAction, mainForm.actionList, mainForm.language, out string validationMessage))
+            {
+                PostMessage("showToast", new
+                {
+                    title = mainForm.language.messageTitle_warn,
+                    message = validationMessage,
+                    type = "warn",
+                    duration = 3000
+                });
+                PostMessage("addActionResult", new { success = false });
+                return;
+            }
+
             mainForm.actionList.Add(newAction);
             WriteActionList();
 
@@ -400,6 +415,7 @@ namespace WindowsShutdownHelper
                 type = "success",
                 duration = 2000
             });
+            PostMessage("addActionResult", new { success = true });
         }
 
         private void HandleDeleteAction(JsonElement data)

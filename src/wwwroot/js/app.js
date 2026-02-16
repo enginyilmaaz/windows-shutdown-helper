@@ -122,6 +122,13 @@ const App = {
             self._updatePauseUI(data);
         });
 
+        // Close modal only after backend confirms action creation.
+        Bridge.on('addActionResult', function (data) {
+            if (data && data.success) {
+                self.closeModal();
+            }
+        });
+
         // ─── Tab bar filtering ───
         document.querySelectorAll('.tab-item[data-filter]').forEach(function (tab) {
             tab.addEventListener('click', function () {
