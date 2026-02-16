@@ -9,16 +9,18 @@
 <body>
     <div id="panel" class="panel">
         <div class="header">
-            <span class="header-icon" id="header-icon">&#xe88e;</span>
-            <span class="header-title" id="header-title"></span>
+            <span class="header-icon-wrap">
+                <span class="header-icon" id="header-icon">&#xe88e;</span>
+            </span>
+            <span class="header-title" id="header-title">Windows Shutdown Helper</span>
         </div>
-        <div class="countdown-text" id="countdown-text"></div>
-        <div class="action-type" id="action-type"></div>
-        <div class="info-text" id="info-text"></div>
+        <div class="countdown-text" id="countdown-text">Preparing countdown...</div>
+        <div class="action-type" id="action-type">...</div>
+        <div class="info-text" id="info-text">You can cancel or skip this action.</div>
         <div class="buttons">
-            <button class="btn-cd" id="btn-delete" disabled>Delete</button>
-            <button class="btn-cd" id="btn-ignore" disabled>Ignore</button>
-            <button class="btn-cd" id="btn-skip" disabled>Skip</button>
+            <button class="btn-cd btn-danger" id="btn-delete" disabled>Delete</button>
+            <button class="btn-cd btn-neutral" id="btn-ignore" disabled>Ignore</button>
+            <button class="btn-cd btn-primary" id="btn-skip" disabled>Skip</button>
         </div>
     </div>
     <script src="js/countdown.js"></script>

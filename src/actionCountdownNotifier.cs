@@ -20,6 +20,11 @@ namespace WindowsShutdownHelper
         public Timer timer = new Timer();
 
         private bool _webViewReady;
+        private bool _pageReady;
+        private bool _initSent;
+        private bool _timerStarted;
+        private Panel _loadingOverlay;
+        private Label _loadingLabel;
         private Point dragStartCursor;
         private Point dragStartForm;
         private bool dragging;
@@ -31,6 +36,7 @@ namespace WindowsShutdownHelper
             ActionModel _action)
         {
             InitializeComponent();
+            InitializeLoadingOverlay();
             action = _action;
             showTimeSecond = _showTimeSecond;
             messageTitle = _messageTitle;
@@ -44,6 +50,7 @@ namespace WindowsShutdownHelper
         {
             try
             {
+                ShowLoadingOverlay();
                 await InitializeWebView();
             }
             catch (Exception ex)
@@ -81,7 +88,19 @@ namespace WindowsShutdownHelper
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _webViewReady = true;
+            TrySendInitData();
+        }
 
+        private void TrySendInitData()
+        {
+            if (_initSent || !_webViewReady || !_pageReady) return;
+            _initSent = true;
+
+            SendInitData();
+        }
+
+        private void SendInitData()
+        {
             bool enableIgnore = true;
             bool enableDelete = action.triggerType == config.triggerTypes.fromNow ||
                                 action.triggerType == config.triggerTypes.certainTime;
@@ -104,11 +123,53 @@ namespace WindowsShutdownHelper
             };
 
             PostMessage("initCountdown", initData);
+        }
 
-            // Start countdown timer
+        private void StartCountdownTimer()
+        {
+            if (_timerStarted) return;
+            _timerStarted = true;
+
             timer.Interval = 1000;
+            timer.Tick -= timerTick;
             timer.Tick += timerTick;
             timer.Start();
+        }
+
+        private void InitializeLoadingOverlay()
+        {
+            _loadingLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(97, 106, 124),
+                Text = language?.common_loading ?? "Yükleniyor..."
+            };
+
+            _loadingOverlay = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(241, 245, 249)
+            };
+
+            _loadingOverlay.Controls.Add(_loadingLabel);
+            Controls.Add(_loadingOverlay);
+            _loadingOverlay.BringToFront();
+        }
+
+        private void ShowLoadingOverlay()
+        {
+            if (_loadingOverlay == null) return;
+            _loadingLabel.Text = language?.common_loading ?? "Yükleniyor...";
+            _loadingOverlay.Visible = true;
+            _loadingOverlay.BringToFront();
+        }
+
+        private void HideLoadingOverlay()
+        {
+            if (_loadingOverlay == null) return;
+            _loadingOverlay.Visible = false;
         }
 
         private void PostMessage(string type, object data)
@@ -152,6 +213,14 @@ namespace WindowsShutdownHelper
 
             switch (type)
             {
+                case "ready":
+                    _pageReady = true;
+                    TrySendInitData();
+                    break;
+                case "initialized":
+                    HideLoadingOverlay();
+                    StartCountdownTimer();
+                    break;
                 case "ignore":
                     timer.Stop();
                     Close();
