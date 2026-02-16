@@ -36,7 +36,8 @@ namespace WindowsShutdownHelper.functions
 
         private static bool IsCountdownNotifierVisible()
         {
-            return Application.OpenForms.OfType<actionCountdownNotifier>().Any(form => form.Visible);
+            return Application.OpenForms.OfType<actionCountdownNotifier>()
+                .Any(form => form.Visible && form.Opacity > 0);
         }
 
         private static bool ShowCountdownNotification(

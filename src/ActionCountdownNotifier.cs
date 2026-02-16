@@ -97,7 +97,8 @@ namespace WindowsShutdownHelper
                 _action);
 
             _showAfterInitialized = true;
-            _ = EnsureWebViewInitializedAsync(showLoading: false);
+            EnsureHiddenHostVisible();
+            _ = EnsureWebViewInitializedSafeAsync(showLoading: false);
             TrySendInitData();
         }
 
@@ -105,23 +106,8 @@ namespace WindowsShutdownHelper
         {
             if (_webViewReady || _webViewInitStarted || IsDisposed) return;
 
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.Manual;
-            Location = new Point(-32000, -32000);
-            Opacity = 0;
-            _isPrewarmedHidden = true;
-
-            if (!IsHandleCreated)
-            {
-                var _ = Handle;
-            }
-
-            if (!webView.IsHandleCreated)
-            {
-                webView.CreateControl();
-            }
-
-            _ = EnsureWebViewInitializedAsync(showLoading: false);
+            EnsureHiddenHostVisible();
+            _ = EnsureWebViewInitializedSafeAsync(showLoading: false);
         }
 
         private void ConfigureNotification(
@@ -148,9 +134,23 @@ namespace WindowsShutdownHelper
             timer.Stop();
         }
 
+        private async Task EnsureWebViewInitializedSafeAsync(bool showLoading)
+        {
+            try
+            {
+                await EnsureWebViewInitializedAsync(showLoading);
+                TrySendInitData();
+            }
+            catch
+            {
+                // If prewarm/init fails transiently, keep app running and allow retry.
+            }
+        }
+
         private async Task EnsureWebViewInitializedAsync(bool showLoading)
         {
-            if (_webViewReady || _webViewInitStarted) return;
+            if (_webViewReady) return;
+            if (_webViewInitStarted) return;
 
             _webViewInitStarted = true;
             if (showLoading)
@@ -158,7 +158,37 @@ namespace WindowsShutdownHelper
                 ShowLoadingOverlay();
             }
 
-            await InitializeWebView();
+            try
+            {
+                await InitializeWebView();
+            }
+            catch
+            {
+                _webViewInitStarted = false;
+                throw;
+            }
+        }
+
+        private void EnsureHiddenHostVisible()
+        {
+            if (!IsHandleCreated)
+            {
+                var _ = Handle;
+            }
+
+            if (!webView.IsHandleCreated)
+            {
+                webView.CreateControl();
+            }
+
+            if (Visible) return;
+
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            Location = new Point(-32000, -32000);
+            Opacity = 0;
+            _isPrewarmedHidden = true;
+            Show();
         }
 
         private async System.Threading.Tasks.Task InitializeWebView()
