@@ -164,6 +164,15 @@ namespace WindowsShutdownHelper.Lang
                 ModalTitleEditAction = "Modifica Azione",
                 MainButtonEditAction = "Aggiorna Azione",
 
+                // Bluetooth
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Dispositivo Bluetooth non raggiungibile",
+                BluetoothScanButton = "Cerca dispositivi",
+                BluetoothScanning = "Ricerca...",
+                BluetoothNoDeviceFound = "Nessun dispositivo trovato",
+                BluetoothSelectDevice = "Seleziona un dispositivo",
+                BluetoothNotAvailable = "Bluetooth non disponibile",
+                BluetoothDeviceLabel = "Dispositivo",
+
             };
             return lang;
         }

@@ -20,6 +20,13 @@ const Bridge = {
         this._handlers[type].push(handler);
     },
 
+    // Unregister handler
+    off(type, handler) {
+        var list = this._handlers[type];
+        if (!list) return;
+        this._handlers[type] = list.filter(function (h) { return h !== handler; });
+    },
+
     // Emit event to registered handlers
     _emit(type, data) {
         const handlers = this._handlers[type];
@@ -100,6 +107,9 @@ if (window.chrome && window.chrome.webview) {
                 break;
             case 'updateActionResult':
                 Bridge._emit('updateActionResult', msg.data);
+                break;
+            case 'bluetoothScanResult':
+                Bridge._emit('bluetoothScanResult', msg.data);
                 break;
         }
     });

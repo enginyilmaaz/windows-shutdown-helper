@@ -165,6 +165,15 @@
                 ModalTitleEditAction = "Görevi Düzenle",
                 MainButtonEditAction = "Güncelle",
 
+                // Bluetooth
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth cihaz erişilemez",
+                BluetoothScanButton = "Cihaz Tara",
+                BluetoothScanning = "Taranıyor...",
+                BluetoothNoDeviceFound = "Cihaz bulunamadı",
+                BluetoothSelectDevice = "Bir cihaz seçin",
+                BluetoothNotAvailable = "Bluetooth kullanılamıyor",
+                BluetoothDeviceLabel = "Cihaz",
+
             };
 
 

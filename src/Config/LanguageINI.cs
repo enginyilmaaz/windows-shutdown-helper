@@ -175,5 +175,14 @@
         public string ModalTitleEditAction { get; set; }
         public string MainButtonEditAction { get; set; }
 
+        // Bluetooth
+        public string MainCboxTriggerTypeItemBluetoothNotReachable { get; set; }
+        public string BluetoothScanButton { get; set; }
+        public string BluetoothScanning { get; set; }
+        public string BluetoothNoDeviceFound { get; set; }
+        public string BluetoothSelectDevice { get; set; }
+        public string BluetoothNotAvailable { get; set; }
+        public string BluetoothDeviceLabel { get; set; }
+
     }
 }

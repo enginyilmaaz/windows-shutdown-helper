@@ -38,7 +38,9 @@ namespace WindowsShutdownHelper
         private const int LoadingOverlayDelayMs = 350;
         private readonly string[] _subWindowPrewarmPages = { "settings", "logs", "about" };
         private readonly HashSet<string> _executedIdleActionKeys = new HashSet<string>();
+        private readonly HashSet<string> _executedBluetoothActionKeys = new HashSet<string>();
         private readonly Dictionary<string, DateTime> _certainTimeLastExecutionDates = new Dictionary<string, DateTime>();
+        private const int BluetoothNotReachableThresholdSeconds = 5;
         private bool _subWindowPrewarmStarted;
         private bool _startupErrorShown;
 
@@ -136,6 +138,7 @@ namespace WindowsShutdownHelper
                 ActionList = LoadActionList();
 
                 DeleteExpriedAction();
+                EnsureBluetoothMonitoring();
 
                 // Setup timer
                 Timer.Interval = 1000;
@@ -381,6 +384,7 @@ namespace WindowsShutdownHelper
             if (raw == Config.TriggerTypes.SystemIdle) return Language.MainCboxTriggerTypeItemSystemIdle;
             if (raw == Config.TriggerTypes.CertainTime) return Language.MainCboxTriggerTypeItemCertainTime;
             if (raw == Config.TriggerTypes.FromNow) return Language.MainCboxTriggerTypeItemFromNow;
+            if (raw == Config.TriggerTypes.BluetoothNotReachable) return Language.MainCboxTriggerTypeItemBluetoothNotReachable;
             return raw;
         }
 
@@ -391,6 +395,7 @@ namespace WindowsShutdownHelper
             if (normalized == "FromNow") return "FromNow";
             if (normalized == "SystemIdle") return "SystemIdle";
             if (normalized == "CertainTime") return "CertainTime";
+            if (normalized == "BluetoothNotReachable") return "BluetoothNotReachable";
             return normalized;
         }
 
@@ -548,10 +553,17 @@ namespace WindowsShutdownHelper
                 case "resumeActions":
                     HandleResumeActions();
                     break;
+                case "startBluetoothScan":
+                    HandleStartBluetoothScan();
+                    break;
+                case "stopBluetoothScan":
+                    HandleStopBluetoothScan();
+                    break;
                 case "exitApp":
                     IsApplicationExiting = true;
                     StopSubWindowPrewarm();
                     CloseAllSubWindows();
+                    BluetoothScanner.StopMonitoring();
                     Logger.DoLog(Config.ActionTypes.AppTerminated);
                     Application.ExitThread();
                     break;
@@ -754,6 +766,21 @@ namespace WindowsShutdownHelper
                     parsedAction.Value = !string.IsNullOrEmpty(timeStr)
                         ? timeStr + ":00"
                         : DateTime.Now.AddMinutes(1).ToString("HH:mm:00");
+                }
+                else if (triggerType == "BluetoothNotReachable")
+                {
+                    parsedAction.TriggerType = Config.TriggerTypes.BluetoothNotReachable;
+
+                    string btMac = data.GetProperty("bluetoothMac").GetString();
+                    string btName = data.GetProperty("bluetoothName").GetString();
+
+                    if (string.IsNullOrWhiteSpace(btMac))
+                    {
+                        return false;
+                    }
+
+                    parsedAction.Value = btMac;
+                    parsedAction.ValueUnit = btName ?? "";
                 }
                 else
                 {
@@ -972,6 +999,54 @@ namespace WindowsShutdownHelper
             PostMessage("pauseStatus", status);
         }
 
+        // =============== Bluetooth Scanning ===============
+
+        private Timer _bluetoothScanTimer;
+
+        private void HandleStartBluetoothScan()
+        {
+            BluetoothScanner.StartDiscoveryScan();
+
+            _bluetoothScanTimer = new Timer { Interval = 1000 };
+            _bluetoothScanTimer.Tick += (s, e) =>
+            {
+                var devices = BluetoothScanner.GetDiscoveredDevices();
+                var list = devices.Select(d => new
+                {
+                    mac = d.MacAddress,
+                    name = d.LocalName ?? "",
+                    rssi = d.RssiDbm
+                }).ToList();
+
+                PostMessage("bluetoothScanResult", list);
+            };
+            _bluetoothScanTimer.Start();
+        }
+
+        private void HandleStopBluetoothScan()
+        {
+            _bluetoothScanTimer?.Stop();
+            _bluetoothScanTimer?.Dispose();
+            _bluetoothScanTimer = null;
+            BluetoothScanner.StopDiscoveryScan();
+        }
+
+        private void EnsureBluetoothMonitoring()
+        {
+            bool hasBluetoothTrigger = ActionList.Any(a =>
+                a.TriggerType == Config.TriggerTypes.BluetoothNotReachable);
+
+            if (hasBluetoothTrigger && !BluetoothScanner.IsMonitoring)
+            {
+                BluetoothScanner.StartMonitoring();
+            }
+            else if (!hasBluetoothTrigger && BluetoothScanner.IsMonitoring)
+            {
+                BluetoothScanner.StopMonitoring();
+                _executedBluetoothActionKeys.Clear();
+            }
+        }
+
         // =============== Action List Persistence ===============
 
         public void WriteJsonToActionList()
@@ -979,6 +1054,7 @@ namespace WindowsShutdownHelper
             JsonWriter.WriteJson(AppContext.BaseDirectory + "\\ActionList.json", true,
                 ActionList.ToList());
             CleanupActionExecutionState();
+            EnsureBluetoothMonitoring();
             RefreshActionsInUI();
         }
 
@@ -986,6 +1062,7 @@ namespace WindowsShutdownHelper
         {
             var validKeys = new HashSet<string>(ActionList.Select(BuildActionExecutionKey));
             _executedIdleActionKeys.RemoveWhere(key => !validKeys.Contains(key));
+            _executedBluetoothActionKeys.RemoveWhere(key => !validKeys.Contains(key));
 
             foreach (string key in _certainTimeLastExecutionDates.Keys.ToList())
             {
@@ -1090,6 +1167,24 @@ namespace WindowsShutdownHelper
                 Actions.DoActionByTypes(action);
                 ActionList.Remove(action);
                 WriteJsonToActionList();
+            }
+
+            if (action.TriggerType == Config.TriggerTypes.BluetoothNotReachable)
+            {
+                if (string.IsNullOrWhiteSpace(action.Value)) return;
+
+                bool reachable = BluetoothScanner.IsDeviceReachable(action.Value, BluetoothNotReachableThresholdSeconds);
+
+                if (reachable)
+                {
+                    _executedBluetoothActionKeys.Remove(actionKey);
+                }
+                else if (BluetoothScanner.HasDeviceEverBeenSeen(action.Value) &&
+                         !_executedBluetoothActionKeys.Contains(actionKey))
+                {
+                    _executedBluetoothActionKeys.Add(actionKey);
+                    Actions.DoActionByTypes(action);
+                }
             }
         }
 
@@ -1278,6 +1373,7 @@ namespace WindowsShutdownHelper
 
         private void mainForm_FormClosed(object sender, FormClosedEventArgs e)
         {
+            BluetoothScanner.StopMonitoring();
             Logger.DoLog(Config.ActionTypes.AppTerminated);
         }
 
@@ -1286,6 +1382,7 @@ namespace WindowsShutdownHelper
             IsApplicationExiting = true;
             StopSubWindowPrewarm();
             CloseAllSubWindows();
+            BluetoothScanner.StopMonitoring();
             Logger.DoLog(Config.ActionTypes.AppTerminated);
             Application.ExitThread();
         }

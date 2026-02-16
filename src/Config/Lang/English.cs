@@ -164,6 +164,15 @@
                 ModalTitleEditAction = "Edit Action",
                 MainButtonEditAction = "Update Action",
 
+                // Bluetooth
+                MainCboxTriggerTypeItemBluetoothNotReachable = "Bluetooth device not reachable",
+                BluetoothScanButton = "Scan Devices",
+                BluetoothScanning = "Scanning...",
+                BluetoothNoDeviceFound = "No device found",
+                BluetoothSelectDevice = "Select a device",
+                BluetoothNotAvailable = "Bluetooth is not available",
+                BluetoothDeviceLabel = "Device",
+
             };
             return lang;
         }

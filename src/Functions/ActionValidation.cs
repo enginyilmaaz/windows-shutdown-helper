@@ -184,6 +184,17 @@ namespace WindowsShutdownHelper.Functions
                 return true;
             }
 
+            if (action.TriggerType == Config.TriggerTypes.BluetoothNotReachable)
+            {
+                if (string.IsNullOrWhiteSpace(action.Value))
+                {
+                    return false;
+                }
+
+                orderValue = (long)Functions.BluetoothScanner.MacStringToUlong(action.Value);
+                return orderValue != 0;
+            }
+
             return false;
         }
 

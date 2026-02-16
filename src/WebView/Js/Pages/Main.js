@@ -31,6 +31,7 @@ window.MainPage = {
         this._triggerTypeByLabel[L('MainCboxTriggerTypeItemSystemIdle')] = 'SystemIdle';
         this._triggerTypeByLabel[L('MainCboxTriggerTypeItemFromNow')] = 'FromNow';
         this._triggerTypeByLabel[L('MainCboxTriggerTypeItemCertainTime')] = 'CertainTime';
+        this._triggerTypeByLabel[L('MainCboxTriggerTypeItemBluetoothNotReachable')] = 'BluetoothNotReachable';
     },
 
     _getSortLocale() {
@@ -72,7 +73,8 @@ window.MainPage = {
         return this._sortLocalizedOptions([
             { value: 'SystemIdle', label: L('MainCboxTriggerTypeItemSystemIdle') },
             { value: 'FromNow', label: L('MainCboxTriggerTypeItemFromNow') },
-            { value: 'CertainTime', label: L('MainCboxTriggerTypeItemCertainTime') }
+            { value: 'CertainTime', label: L('MainCboxTriggerTypeItemCertainTime') },
+            { value: 'BluetoothNotReachable', label: L('MainCboxTriggerTypeItemBluetoothNotReachable') }
         ]);
     },
 
@@ -90,6 +92,7 @@ window.MainPage = {
         if (v === 'FromNow') return 'FromNow';
         if (v === 'SystemIdle') return 'SystemIdle';
         if (v === 'CertainTime') return 'CertainTime';
+        if (v === 'BluetoothNotReachable') return 'BluetoothNotReachable';
         return v;
     },
 
@@ -160,13 +163,23 @@ window.MainPage = {
             }
         }
 
+        var bluetoothMac = '';
+        var bluetoothName = '';
+
+        if (triggerRaw === 'BluetoothNotReachable') {
+            bluetoothMac = action && action.value || '';
+            bluetoothName = action && action.valueUnit || '';
+        }
+
         return {
             index: index,
             actionType: actionRaw || '0',
             triggerType: triggerRaw || '0',
             value: value,
             timeUnit: timeUnit,
-            time: time
+            time: time,
+            bluetoothMac: bluetoothMac,
+            bluetoothName: bluetoothName
         };
     },
 
@@ -228,6 +241,15 @@ window.MainPage = {
                     '<option value="2">' + (L('MainTimeUnitHours') || 'Hours') + '</option>' +
                 '</select>' +
                 '<input type="time" id="inp-time" class="form-input form-input-small" style="display:none">' +
+                '<div id="bt-panel" style="display:none">' +
+                    '<button type="button" class="btn btn-secondary" id="btn-bt-scan">' + (L('BluetoothScanButton') || 'Scan Devices') + '</button>' +
+                    '<span id="bt-scan-status" style="margin-left:8px;font-size:0.85em;color:var(--text-secondary,#888);display:none"></span>' +
+                    '<select id="sel-bt-device" class="form-select" style="display:none;margin-top:6px">' +
+                        '<option value="">' + (L('BluetoothSelectDevice') || 'Select a device') + '</option>' +
+                    '</select>' +
+                    '<input type="hidden" id="inp-bt-mac" value="">' +
+                    '<input type="hidden" id="inp-bt-name" value="">' +
+                '</div>' +
             '</div>' +
             '<button class="btn btn-primary" id="btn-submit">' +
                 (isEdit ? (L('MainButtonEditAction') || 'Update Action') : L('MainButtonAddAction')) +
@@ -239,6 +261,7 @@ window.MainPage = {
         options = options || {};
         var isEdit = options.mode === 'edit';
         var initialData = options.initialData || null;
+        var btScanListener = null;
 
         function updateTriggerInputs() {
             var v = container.querySelector('#sel-trigger').value;
@@ -246,32 +269,116 @@ window.MainPage = {
             var inp = container.querySelector('#inp-value');
             var unit = container.querySelector('#sel-unit');
             var time = container.querySelector('#inp-time');
+            var btPanel = container.querySelector('#bt-panel');
             var lbl = container.querySelector('#lbl-value');
             var L = Bridge.lang.bind(Bridge);
+
+            // Stop any ongoing BT scan when switching triggers
+            if (v !== 'BluetoothNotReachable' && btScanListener) {
+                Bridge.send('stopBluetoothScan', {});
+                Bridge.off('bluetoothScanResult', btScanListener);
+                btScanListener = null;
+            }
 
             if (v === '0') {
                 hint.style.display = '';
                 inp.style.display = 'none';
                 unit.style.display = 'none';
                 time.style.display = 'none';
+                btPanel.style.display = 'none';
             } else if (v === 'SystemIdle' || v === 'FromNow') {
                 hint.style.display = 'none';
                 inp.style.display = '';
                 unit.style.display = '';
                 time.style.display = 'none';
+                btPanel.style.display = 'none';
                 lbl.textContent = L('MainLabelValueDuration') || L('MainLabelValue');
             } else if (v === 'CertainTime') {
                 hint.style.display = 'none';
                 inp.style.display = 'none';
                 unit.style.display = 'none';
                 time.style.display = '';
+                btPanel.style.display = 'none';
                 lbl.textContent = L('MainLabelValueTime') || L('MainLabelValue');
+            } else if (v === 'BluetoothNotReachable') {
+                hint.style.display = 'none';
+                inp.style.display = 'none';
+                unit.style.display = 'none';
+                time.style.display = 'none';
+                btPanel.style.display = '';
+                lbl.textContent = L('BluetoothDeviceLabel') || L('MainLabelValue');
             }
         }
 
         // Trigger change -> toggle value inputs
         container.querySelector('#sel-trigger').addEventListener('change', function () {
             updateTriggerInputs();
+        });
+
+        // Bluetooth scan button
+        container.querySelector('#btn-bt-scan').addEventListener('click', function () {
+            var btnScan = container.querySelector('#btn-bt-scan');
+            var status = container.querySelector('#bt-scan-status');
+            var selDevice = container.querySelector('#sel-bt-device');
+            var L = Bridge.lang.bind(Bridge);
+
+            btnScan.disabled = true;
+            status.style.display = '';
+            status.textContent = L('BluetoothScanning') || 'Scanning...';
+            selDevice.style.display = 'none';
+
+            // Clear previous options except placeholder
+            while (selDevice.options.length > 1) {
+                selDevice.remove(1);
+            }
+
+            // Remove previous listener if any
+            if (btScanListener) {
+                Bridge.off('bluetoothScanResult', btScanListener);
+            }
+
+            var seenMacs = {};
+            btScanListener = function (devices) {
+                if (!devices || !devices.length) return;
+                for (var i = 0; i < devices.length; i++) {
+                    var d = devices[i];
+                    if (!d.mac || seenMacs[d.mac]) continue;
+                    seenMacs[d.mac] = true;
+                    var opt = document.createElement('option');
+                    opt.value = d.mac;
+                    opt.textContent = (d.name || d.mac) + ' (' + d.mac + ')';
+                    opt.setAttribute('data-name', d.name || '');
+                    selDevice.appendChild(opt);
+                }
+                if (selDevice.options.length > 1) {
+                    selDevice.style.display = '';
+                }
+            };
+
+            Bridge.on('bluetoothScanResult', btScanListener);
+            Bridge.send('startBluetoothScan', {});
+
+            // Stop scan after 10 seconds
+            setTimeout(function () {
+                Bridge.send('stopBluetoothScan', {});
+                btnScan.disabled = false;
+                if (selDevice.options.length <= 1) {
+                    status.textContent = L('BluetoothNoDeviceFound') || 'No device found';
+                } else {
+                    status.style.display = 'none';
+                }
+            }, 10000);
+        });
+
+        // Bluetooth device select
+        container.querySelector('#sel-bt-device').addEventListener('change', function () {
+            var selDevice = container.querySelector('#sel-bt-device');
+            var inpMac = container.querySelector('#inp-bt-mac');
+            var inpName = container.querySelector('#inp-bt-name');
+            var selected = selDevice.options[selDevice.selectedIndex];
+
+            inpMac.value = selDevice.value || '';
+            inpName.value = selected ? (selected.getAttribute('data-name') || '') : '';
         });
 
         if (initialData) {
@@ -288,6 +395,24 @@ window.MainPage = {
             if (inpValue) inpValue.value = initialData.value || '1';
             if (selUnit) selUnit.value = initialData.timeUnit || '1';
             if (inpTime && initialData.time) inpTime.value = initialData.time;
+
+            // Restore Bluetooth data for editing
+            if (initialData.bluetoothMac) {
+                var inpMac = container.querySelector('#inp-bt-mac');
+                var inpName = container.querySelector('#inp-bt-name');
+                var selDevice = container.querySelector('#sel-bt-device');
+                if (inpMac) inpMac.value = initialData.bluetoothMac;
+                if (inpName) inpName.value = initialData.bluetoothName || '';
+                if (selDevice) {
+                    var opt = document.createElement('option');
+                    opt.value = initialData.bluetoothMac;
+                    opt.textContent = (initialData.bluetoothName || initialData.bluetoothMac) + ' (' + initialData.bluetoothMac + ')';
+                    opt.setAttribute('data-name', initialData.bluetoothName || '');
+                    selDevice.appendChild(opt);
+                    selDevice.value = initialData.bluetoothMac;
+                    selDevice.style.display = '';
+                }
+            }
         } else {
             updateTriggerInputs();
         }
@@ -305,8 +430,17 @@ window.MainPage = {
                 triggerType: trigger,
                 value: value,
                 timeUnit: unit,
-                time: time
+                time: time,
+                bluetoothMac: container.querySelector('#inp-bt-mac').value || '',
+                bluetoothName: container.querySelector('#inp-bt-name').value || ''
             };
+
+            // Stop BT scan if running
+            if (btScanListener) {
+                Bridge.send('stopBluetoothScan', {});
+                Bridge.off('bluetoothScanResult', btScanListener);
+                btScanListener = null;
+            }
 
             if (isEdit) {
                 payload.index = options.index;
