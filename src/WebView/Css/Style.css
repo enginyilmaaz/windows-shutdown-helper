@@ -923,6 +923,17 @@ body {
     color: var(--text-secondary);
 }
 
+.data-table th.row-actions-col,
+.data-table td.row-actions-cell {
+    width: 84px;
+    min-width: 84px;
+    text-align: right;
+}
+
+.data-table td.row-actions-cell {
+    padding-right: 8px;
+}
+
 .data-table tr:hover {
     background: var(--accent-blue-row-hover);
 }
@@ -934,6 +945,51 @@ body {
 .data-table tr {
     cursor: pointer;
     transition: background 0.15s;
+}
+
+.row-actions-cell {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+}
+
+.row-action-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-hint);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(4px);
+    transition: all 0.14s ease;
+}
+
+.row-action-btn .mi {
+    font-size: 18px;
+}
+
+.data-table tr:hover .row-action-btn,
+.data-table tr.selected .row-action-btn {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+}
+
+.row-action-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-white-subtle);
+}
+
+.row-action-btn.row-action-delete:hover {
+    color: var(--color-danger-text);
+    background: var(--color-danger-bg-hover);
 }
 
 .table-empty {

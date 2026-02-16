@@ -4,10 +4,139 @@ window.MainPage = {
     _currentFilter: 'all',
     _searchQuery: '',
     _rawActions: [],
+    _actionTypeByLabel: null,
+    _triggerTypeByLabel: null,
+
+    _resetLabelCaches() {
+        this._actionTypeByLabel = null;
+        this._triggerTypeByLabel = null;
+    },
+
+    _buildLabelCaches() {
+        if (this._actionTypeByLabel && this._triggerTypeByLabel) {
+            return;
+        }
+
+        var L = Bridge.lang.bind(Bridge);
+        this._actionTypeByLabel = {};
+        this._triggerTypeByLabel = {};
+
+        this._actionTypeByLabel[L('MainCboxActionTypeItemLockComputer')] = 'lockComputer';
+        this._actionTypeByLabel[L('MainCboxActionTypeItemSleepComputer')] = 'sleepComputer';
+        this._actionTypeByLabel[L('MainCboxActionTypeItemTurnOffMonitor')] = 'turnOffMonitor';
+        this._actionTypeByLabel[L('MainCboxActionTypeItemShutdownComputer')] = 'shutdownComputer';
+        this._actionTypeByLabel[L('MainCboxActionTypeItemRestartComputer')] = 'restartComputer';
+        this._actionTypeByLabel[L('MainCboxActionTypeItemLogOffWindows')] = 'logOffWindows';
+
+        this._triggerTypeByLabel[L('MainCboxTriggerTypeItemSystemIdle')] = 'systemIdle';
+        this._triggerTypeByLabel[L('MainCboxTriggerTypeItemFromNow')] = 'fromNow';
+        this._triggerTypeByLabel[L('MainCboxTriggerTypeItemCertainTime')] = 'certainTime';
+    },
+
+    _normalizeTriggerRaw(value) {
+        if (!value) return '';
+        var v = String(value).trim();
+        if (v === 'fromNow') return 'fromNow';
+        if (v === 'systemIdle') return 'systemIdle';
+        if (v === 'certainTime') return 'certainTime';
+        return v;
+    },
+
+    _normalizeActionRaw(value) {
+        if (!value) return '';
+        return String(value).trim();
+    },
+
+    _parseActionDate(value) {
+        var m = /^(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2}):(\d{2})$/.exec(value || '');
+        if (!m) return null;
+
+        var dt = new Date(
+            parseInt(m[3], 10),
+            parseInt(m[2], 10) - 1,
+            parseInt(m[1], 10),
+            parseInt(m[4], 10),
+            parseInt(m[5], 10),
+            parseInt(m[6], 10)
+        );
+
+        return isNaN(dt.getTime()) ? null : dt;
+    },
+
+    _resolveActionRaw(action) {
+        this._buildLabelCaches();
+        var raw = this._normalizeActionRaw(action && (action.actionTypeRaw || action.actionType));
+        return raw || this._actionTypeByLabel[action && action.actionType] || '';
+    },
+
+    _resolveTriggerRaw(action) {
+        this._buildLabelCaches();
+        var raw = this._normalizeTriggerRaw(action && (action.triggerTypeRaw || action.triggerType));
+        return raw || this._triggerTypeByLabel[action && action.triggerType] || '';
+    },
+
+    _toEditableAction(index, action) {
+        var triggerRaw = this._resolveTriggerRaw(action);
+        var actionRaw = this._resolveActionRaw(action);
+        var value = '1';
+        var timeUnit = '1';
+        var time = '';
+
+        if (triggerRaw === 'systemIdle') {
+            var seconds = parseInt(action && action.value, 10);
+            if (!isNaN(seconds) && seconds > 0) {
+                value = String(seconds);
+                timeUnit = '0';
+            }
+        } else if (triggerRaw === 'certainTime') {
+            var rawTime = String(action && action.value || '');
+            var timeMatch = /^(\d{2}:\d{2})/.exec(rawTime);
+            time = timeMatch ? timeMatch[1] : '';
+        } else if (triggerRaw === 'fromNow') {
+            var targetDate = this._parseActionDate(action && action.value);
+            if (targetDate) {
+                var remainingSeconds = Math.max(1, Math.round((targetDate.getTime() - Date.now()) / 1000));
+                if (remainingSeconds % 3600 === 0) {
+                    value = String(Math.max(1, remainingSeconds / 3600));
+                    timeUnit = '2';
+                } else if (remainingSeconds % 60 === 0) {
+                    value = String(Math.max(1, remainingSeconds / 60));
+                    timeUnit = '1';
+                } else {
+                    value = String(remainingSeconds);
+                    timeUnit = '0';
+                }
+            }
+        }
+
+        return {
+            index: index,
+            actionType: actionRaw || '0',
+            triggerType: triggerRaw || '0',
+            value: value,
+            timeUnit: timeUnit,
+            time: time
+        };
+    },
+
+    requestDeleteAction(index) {
+        if (index < 0) return;
+        var L = Bridge.lang.bind(Bridge);
+        var confirmMessage = L('MessageContentConfirmDeleteAction')
+            || ((L('ContextMenuStripMainGridDeleteSelectedAction') || 'Delete selected action') + '?');
+
+        if (!window.confirm(confirmMessage)) {
+            return;
+        }
+
+        Bridge.send('deleteAction', { index: index });
+    },
 
     // Render the form HTML (used inside modal)
-    renderForm() {
+    renderForm(options) {
+        options = options || {};
         var L = Bridge.lang.bind(Bridge);
+        var isEdit = options.mode === 'edit';
         return '' +
             '<div class="form-row">' +
                 '<span class="form-label">' + L('MainLabelActionType') + '</span>' +
@@ -41,14 +170,19 @@ window.MainPage = {
                 '</select>' +
                 '<input type="time" id="inp-time" class="form-input form-input-small" style="display:none">' +
             '</div>' +
-            '<button class="btn btn-primary" id="btn-add">' + L('MainButtonAddAction') + '</button>';
+            '<button class="btn btn-primary" id="btn-submit">' +
+                (isEdit ? (L('MainButtonEditAction') || 'Update Action') : L('MainButtonAddAction')) +
+            '</button>';
     },
 
     // Bind form events (called after modal body is populated)
-    afterRenderForm(container) {
-        // Trigger change -> toggle value inputs
-        container.querySelector('#sel-trigger').addEventListener('change', function () {
-            var v = this.value;
+    afterRenderForm(container, options) {
+        options = options || {};
+        var isEdit = options.mode === 'edit';
+        var initialData = options.initialData || null;
+
+        function updateTriggerInputs() {
+            var v = container.querySelector('#sel-trigger').value;
             var hint = container.querySelector('#hint-trigger');
             var inp = container.querySelector('#inp-value');
             var unit = container.querySelector('#sel-unit');
@@ -74,23 +208,54 @@ window.MainPage = {
                 time.style.display = '';
                 lbl.textContent = L('MainLabelValueTime') || L('MainLabelValue');
             }
+        }
+
+        // Trigger change -> toggle value inputs
+        container.querySelector('#sel-trigger').addEventListener('change', function () {
+            updateTriggerInputs();
         });
 
-        // Add action
-        container.querySelector('#btn-add').addEventListener('click', function () {
+        if (initialData) {
+            var selAction = container.querySelector('#sel-action');
+            var selTrigger = container.querySelector('#sel-trigger');
+            var inpValue = container.querySelector('#inp-value');
+            var selUnit = container.querySelector('#sel-unit');
+            var inpTime = container.querySelector('#inp-time');
+
+            if (selAction) selAction.value = initialData.actionType || '0';
+            if (selTrigger) selTrigger.value = initialData.triggerType || '0';
+            updateTriggerInputs();
+
+            if (inpValue) inpValue.value = initialData.value || '1';
+            if (selUnit) selUnit.value = initialData.timeUnit || '1';
+            if (inpTime && initialData.time) inpTime.value = initialData.time;
+        } else {
+            updateTriggerInputs();
+        }
+
+        // Submit action (add / edit)
+        container.querySelector('#btn-submit').addEventListener('click', function () {
             var action = container.querySelector('#sel-action').value;
             var trigger = container.querySelector('#sel-trigger').value;
             var value = container.querySelector('#inp-value').value;
             var unit = container.querySelector('#sel-unit').value;
             var time = container.querySelector('#inp-time').value;
 
-            Bridge.send('addAction', {
+            var payload = {
                 actionType: action,
                 triggerType: trigger,
                 value: value,
                 timeUnit: unit,
                 time: time
-            });
+            };
+
+            if (isEdit) {
+                payload.index = options.index;
+                Bridge.send('updateAction', payload);
+                return;
+            }
+
+            Bridge.send('addAction', payload);
         });
     },
 
@@ -111,6 +276,7 @@ window.MainPage = {
     afterRender() {
         var self = this;
         self._selectedRow = -1;
+        self._resetLabelCaches();
 
         // Context menu
         document.addEventListener('click', function () {
@@ -122,7 +288,7 @@ window.MainPage = {
         if (ctxDelete) {
             ctxDelete.addEventListener('click', function () {
                 if (self._selectedRow >= 0) {
-                    Bridge.send('deleteAction', { index: self._selectedRow });
+                    self.requestDeleteAction(self._selectedRow);
                 }
             });
         }
@@ -166,7 +332,10 @@ window.MainPage = {
             };
             var filterText = filterMap[self._currentFilter] || self._currentFilter;
             filtered = filtered.filter(function (a) {
-                return a.actionType === filterText || a.actionType === self._currentFilter;
+                var rawType = self._normalizeActionRaw(a.actionTypeRaw || a.actionType);
+                return a.actionType === filterText ||
+                    a.actionType === self._currentFilter ||
+                    rawType === self._currentFilter;
             });
         }
 
@@ -193,7 +362,12 @@ window.MainPage = {
             '<th>' + L('MainDatagridMainValue') + '</th>' +
             '<th>' + (L('MainDatagridMainValueUnit') || 'Unit') + '</th>' +
             '<th>' + L('MainDatagridMainCreatedDate') + '</th>' +
+            '<th class="row-actions-col"></th>' +
             '</tr></thead><tbody>';
+
+        var canEdit = !!(window.App && typeof window.App.openEditActionModal === 'function');
+        var editTitle = L('ContextMenuStripMainGridEditSelectedAction') || 'Edit action';
+        var deleteTitle = L('ContextMenuStripMainGridDeleteSelectedAction') || 'Delete selected action';
 
         for (var i = 0; i < filtered.length; i++) {
             var a = filtered[i];
@@ -205,6 +379,14 @@ window.MainPage = {
                 '<td>' + (a.value || '') + '</td>' +
                 '<td>' + (a.valueUnit || '') + '</td>' +
                 '<td>' + (a.createdDate || '') + '</td>' +
+                '<td class="row-actions-cell">' +
+                    (canEdit
+                        ? '<button class="row-action-btn row-action-edit" data-row-action="edit" title="' + editTitle + '"><span class="mi">edit</span></button>'
+                        : '') +
+                    '<button class="row-action-btn row-action-delete" data-row-action="delete" title="' + deleteTitle + '">' +
+                        '<span class="mi">delete</span>' +
+                    '</button>' +
+                '</td>' +
                 '</tr>';
         }
 
@@ -230,6 +412,45 @@ window.MainPage = {
                     ctx.style.top = e.clientY + 'px';
                     ctx.classList.add('show');
                 }
+            });
+        });
+
+        wrap.querySelectorAll('.row-action-btn[data-row-action="edit"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var row = btn.closest('tr[data-idx]');
+                if (!row) return;
+
+                var idx = parseInt(row.getAttribute('data-idx'), 10);
+                if (isNaN(idx) || idx < 0 || idx >= self._rawActions.length) return;
+
+                wrap.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
+                row.classList.add('selected');
+                self._selectedRow = idx;
+
+                if (!window.App || typeof window.App.openEditActionModal !== 'function') return;
+                var editable = self._toEditableAction(idx, self._rawActions[idx]);
+                window.App.openEditActionModal(editable);
+            });
+        });
+
+        wrap.querySelectorAll('.row-action-btn[data-row-action="delete"]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var row = btn.closest('tr[data-idx]');
+                if (!row) return;
+
+                var idx = parseInt(row.getAttribute('data-idx'), 10);
+                if (isNaN(idx) || idx < 0) return;
+
+                wrap.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
+                row.classList.add('selected');
+                self._selectedRow = idx;
+                self.requestDeleteAction(idx);
             });
         });
     }

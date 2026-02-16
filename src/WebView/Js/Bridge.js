@@ -98,6 +98,9 @@ if (window.chrome && window.chrome.webview) {
             case 'addActionResult':
                 Bridge._emit('addActionResult', msg.data);
                 break;
+            case 'updateActionResult':
+                Bridge._emit('updateActionResult', msg.data);
+                break;
         }
     });
 }

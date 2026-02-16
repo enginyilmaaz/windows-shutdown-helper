@@ -39,6 +39,8 @@
                 MessageTitleWarn = "Warning",
                 MessageTitleError = "Error",
                 MessageContentActionDeleted = "Action deleted successfully",
+                MessageContentActionUpdated = "Action updated successfully",
+                MessageContentConfirmDeleteAction = "Are you sure you want to delete this action?",
                 MessageContentActionAllDeleted = "All actions deleted successfully",
                 MessageContentActionCreated = "Action created successfully",
                 MessageContentActionChoose = "Made the missing choice, correct it",
@@ -52,6 +54,7 @@
                 LogViewerFormName = "Log Viewer",
                 MessageContentNoLog = "There is no log for now",
                 ContextMenuStripMainGridDeleteSelectedAction = "Delete selected action",
+                ContextMenuStripMainGridEditSelectedAction = "Edit selected action",
                 ContextMenuStripMainGridDeleteAllAction = "Delete all actions",
                 ContextMenuStripNotifyIconAddNewAction = "Create New Action",
                 ContextMenuStripNotifyIconShowSettings = "Settings",
@@ -158,6 +161,8 @@
 
                 // Modal
                 ModalTitleNewAction = "New Action",
+                ModalTitleEditAction = "Edit Action",
+                MainButtonEditAction = "Update Action",
 
             };
             return lang;

@@ -281,6 +281,9 @@ namespace WindowsShutdownHelper
                 case "addAction":
                     HandleAddAction(data);
                     break;
+                case "updateAction":
+                    HandleUpdateAction(data);
+                    break;
                 case "deleteAction":
                     HandleDeleteAction(data);
                     break;
@@ -320,22 +323,6 @@ namespace WindowsShutdownHelper
 
         private void HandleAddAction(JsonElement data)
         {
-            string actionType = data.GetProperty("actionType").GetString();
-            string triggerType = data.GetProperty("triggerType").GetString();
-
-            if (actionType == "0" || triggerType == "0")
-            {
-                PostMessage("showToast", new
-                {
-                    title = MainForm.Language.MessageTitleWarn,
-                    message = MainForm.Language.MessageContentActionChoose,
-                    type = "warn",
-                    duration = 2000
-                });
-                PostMessage("addActionResult", new { success = false });
-                return;
-            }
-
             if (MainForm.ActionList.Count >= 5)
             {
                 PostMessage("showToast", new
@@ -349,47 +336,17 @@ namespace WindowsShutdownHelper
                 return;
             }
 
-            var newAction = new ActionModel
+            if (!TryCreateActionModel(data, DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"), out ActionModel newAction))
             {
-                CreatedDate = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
-                ActionType = actionType
-            };
-
-            if (triggerType == "fromNow")
-            {
-                newAction.TriggerType = Config.TriggerTypes.FromNow;
-                double inputValue = Convert.ToDouble(data.GetProperty("value").GetString());
-                int unitIdx = Convert.ToInt32(data.GetProperty("timeUnit").GetString());
-                DateTime targetTime;
-                if (unitIdx == 0) targetTime = DateTime.Now.AddSeconds(inputValue);
-                else if (unitIdx == 2) targetTime = DateTime.Now.AddHours(inputValue);
-                else targetTime = DateTime.Now.AddMinutes(inputValue);
-                newAction.Value = targetTime.ToString("dd.MM.yyyy HH:mm:ss");
-            }
-            else if (triggerType == "systemIdle")
-            {
-                newAction.TriggerType = Config.TriggerTypes.SystemIdle;
-                int inputValue = Convert.ToInt32(data.GetProperty("value").GetString());
-                int unitIdx = Convert.ToInt32(data.GetProperty("timeUnit").GetString());
-                int valueInSeconds;
-                if (unitIdx == 0) valueInSeconds = inputValue;
-                else if (unitIdx == 2) valueInSeconds = inputValue * 3600;
-                else valueInSeconds = inputValue * 60;
-                newAction.Value = valueInSeconds.ToString();
-                newAction.ValueUnit = "seconds";
-            }
-            else if (triggerType == "certainTime")
-            {
-                newAction.TriggerType = Config.TriggerTypes.CertainTime;
-                string timeStr = data.GetProperty("time").GetString();
-                if (!string.IsNullOrEmpty(timeStr))
+                PostMessage("showToast", new
                 {
-                    newAction.Value = timeStr + ":00";
-                }
-                else
-                {
-                    newAction.Value = DateTime.Now.AddMinutes(1).ToString("HH:mm:00");
-                }
+                    title = MainForm.Language.MessageTitleWarn,
+                    message = MainForm.Language.MessageContentActionChoose,
+                    type = "warn",
+                    duration = 2000
+                });
+                PostMessage("addActionResult", new { success = false });
+                return;
             }
 
             if (!ActionValidation.TryValidateActionForAdd(newAction, MainForm.ActionList, MainForm.Language, out string validationMessage))
@@ -416,6 +373,152 @@ namespace WindowsShutdownHelper
                 duration = 2000
             });
             PostMessage("addActionResult", new { success = true });
+        }
+
+        private void HandleUpdateAction(JsonElement data)
+        {
+            int index = data.GetProperty("index").GetInt32();
+            if (index < 0 || index >= MainForm.ActionList.Count)
+            {
+                PostMessage("updateActionResult", new { success = false });
+                return;
+            }
+
+            string createdDate = MainForm.ActionList[index]?.CreatedDate;
+            if (string.IsNullOrWhiteSpace(createdDate))
+            {
+                createdDate = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
+            }
+
+            if (!TryCreateActionModel(data, createdDate, out ActionModel updatedAction))
+            {
+                PostMessage("showToast", new
+                {
+                    title = MainForm.Language.MessageTitleWarn,
+                    message = MainForm.Language.MessageContentActionChoose,
+                    type = "warn",
+                    duration = 2000
+                });
+                PostMessage("updateActionResult", new { success = false });
+                return;
+            }
+
+            if (!ActionValidation.TryValidateActionForAdd(
+                    updatedAction,
+                    MainForm.ActionList.Where((_, actionIndex) => actionIndex != index),
+                    MainForm.Language,
+                    out string validationMessage))
+            {
+                PostMessage("showToast", new
+                {
+                    title = MainForm.Language.MessageTitleWarn,
+                    message = validationMessage,
+                    type = "warn",
+                    duration = 3000
+                });
+                PostMessage("updateActionResult", new { success = false });
+                return;
+            }
+
+            MainForm.ActionList[index] = updatedAction;
+            WriteActionList();
+
+            PostMessage("showToast", new
+            {
+                title = MainForm.Language.MessageTitleSuccess,
+                message = MainForm.Language.MessageContentActionUpdated ?? MainForm.Language.MessageContentActionCreated,
+                type = "success",
+                duration = 2000
+            });
+            PostMessage("updateActionResult", new { success = true });
+        }
+
+        private static bool TryCreateActionModel(JsonElement data, string createdDate, out ActionModel action)
+        {
+            action = null;
+
+            string actionType = data.GetProperty("actionType").GetString();
+            string triggerType = data.GetProperty("triggerType").GetString();
+
+            if (string.IsNullOrWhiteSpace(actionType) ||
+                string.IsNullOrWhiteSpace(triggerType) ||
+                actionType == "0" ||
+                triggerType == "0")
+            {
+                return false;
+            }
+
+            var parsedAction = new ActionModel
+            {
+                CreatedDate = createdDate,
+                ActionType = actionType
+            };
+
+            try
+            {
+                if (triggerType == "fromNow")
+                {
+                    parsedAction.TriggerType = Config.TriggerTypes.FromNow;
+
+                    if (!double.TryParse(data.GetProperty("value").GetString(), out double inputValue) || inputValue <= 0)
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(data.GetProperty("timeUnit").GetString(), out int unitIdx))
+                    {
+                        unitIdx = 1;
+                    }
+
+                    DateTime targetTime;
+                    if (unitIdx == 0) targetTime = DateTime.Now.AddSeconds(inputValue);
+                    else if (unitIdx == 2) targetTime = DateTime.Now.AddHours(inputValue);
+                    else targetTime = DateTime.Now.AddMinutes(inputValue);
+                    parsedAction.Value = targetTime.ToString("dd.MM.yyyy HH:mm:ss");
+                }
+                else if (triggerType == "systemIdle")
+                {
+                    parsedAction.TriggerType = Config.TriggerTypes.SystemIdle;
+
+                    if (!int.TryParse(data.GetProperty("value").GetString(), out int inputValue) || inputValue <= 0)
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(data.GetProperty("timeUnit").GetString(), out int unitIdx))
+                    {
+                        unitIdx = 1;
+                    }
+
+                    int valueInSeconds;
+                    if (unitIdx == 0) valueInSeconds = inputValue;
+                    else if (unitIdx == 2) valueInSeconds = inputValue * 3600;
+                    else valueInSeconds = inputValue * 60;
+
+                    parsedAction.Value = valueInSeconds.ToString();
+                    parsedAction.ValueUnit = "seconds";
+                }
+                else if (triggerType == "certainTime")
+                {
+                    parsedAction.TriggerType = Config.TriggerTypes.CertainTime;
+                    string timeStr = data.GetProperty("time").GetString();
+
+                    parsedAction.Value = !string.IsNullOrEmpty(timeStr)
+                        ? timeStr + ":00"
+                        : DateTime.Now.AddMinutes(1).ToString("HH:mm:00");
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            action = parsedAction;
+            return true;
         }
 
         private void HandleDeleteAction(JsonElement data)
@@ -587,9 +690,12 @@ namespace WindowsShutdownHelper
                 var d = new Dictionary<string, string>
                 {
                     ["triggerType"] = TranslateTrigger(act.TriggerType),
+                    ["triggerTypeRaw"] = NormalizeTriggerTypeRaw(act.TriggerType),
                     ["actionType"] = TranslateAction(act.ActionType),
+                    ["actionTypeRaw"] = act.ActionType ?? "",
                     ["value"] = act.Value ?? "",
                     ["valueUnit"] = TranslateUnit(act.ValueUnit),
+                    ["valueUnitRaw"] = act.ValueUnit ?? "",
                     ["createdDate"] = act.CreatedDate ?? ""
                 };
                 list.Add(d);
@@ -612,8 +718,18 @@ namespace WindowsShutdownHelper
         {
             if (raw == Config.TriggerTypes.SystemIdle) return MainForm.Language.MainCboxTriggerTypeItemSystemIdle;
             if (raw == Config.TriggerTypes.CertainTime) return MainForm.Language.MainCboxTriggerTypeItemCertainTime;
-            if (raw == Config.TriggerTypes.FromNow) return MainForm.Language.MainCboxTriggerTypeItemFromNow;
+            if (raw == Config.TriggerTypes.FromNow || raw?.Trim() == "fromNow") return MainForm.Language.MainCboxTriggerTypeItemFromNow;
             return raw;
+        }
+
+        private static string NormalizeTriggerTypeRaw(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "";
+            string normalized = raw.Trim();
+            if (normalized == "fromNow") return "fromNow";
+            if (normalized == "systemIdle") return "systemIdle";
+            if (normalized == "certainTime") return "certainTime";
+            return normalized;
         }
 
         private string TranslateUnit(string raw)

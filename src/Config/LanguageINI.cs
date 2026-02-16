@@ -47,6 +47,8 @@
         public string MessageTitleWarn { get; set; }
         public string MessageTitleError { get; set; }
         public string MessageContentActionDeleted { get; set; }
+        public string MessageContentActionUpdated { get; set; }
+        public string MessageContentConfirmDeleteAction { get; set; }
         public string MessageContentDatagridMainActionChoose { get; set; }
         public string MessageContentActionChoose { get; set; }
         public string MessageContentActionCreated { get; set; }
@@ -60,6 +62,7 @@
         public string MessageContentNoLog { get; set; }
 
         public string ContextMenuStripMainGridDeleteSelectedAction { get; set; }
+        public string ContextMenuStripMainGridEditSelectedAction { get; set; }
         public string ContextMenuStripMainGridDeleteAllAction { get; set; }
         public string ContextMenuStripNotifyIconAddNewAction { get; set; }
         public string ContextMenuStripNotifyIconShowSettings { get; set; }
@@ -169,6 +172,8 @@
 
         // Modal
         public string ModalTitleNewAction { get; set; }
+        public string ModalTitleEditAction { get; set; }
+        public string MainButtonEditAction { get; set; }
 
     }
 }

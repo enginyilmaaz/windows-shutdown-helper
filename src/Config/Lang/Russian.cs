@@ -39,6 +39,8 @@ namespace WindowsShutdownHelper.Lang
                 MessageTitleWarn = "Предупреждение",
                 MessageTitleError = "Ошибка",
                 MessageContentActionDeleted = "Действие успешно удалено",
+                MessageContentActionUpdated = "Действие успешно обновлено",
+                MessageContentConfirmDeleteAction = "Вы действительно хотите удалить это действие?",
                 MessageContentActionAllDeleted = "Все действия успешно удалены",
                 MessageContentActionCreated = "Действие успешно создано",
                 MessageContentActionChoose = "Неполный выбор, исправьте",
@@ -52,6 +54,7 @@ namespace WindowsShutdownHelper.Lang
                 LogViewerFormName = "Просмотр журнала",
                 MessageContentNoLog = "Записей пока нет",
                 ContextMenuStripMainGridDeleteSelectedAction = "Удалить выбранное действие",
+                ContextMenuStripMainGridEditSelectedAction = "Редактировать выбранное действие",
                 ContextMenuStripMainGridDeleteAllAction = "Удалить все действия",
                 ContextMenuStripNotifyIconAddNewAction = "Создать новое действие",
                 ContextMenuStripNotifyIconShowSettings = "Настройки",
@@ -158,6 +161,8 @@ namespace WindowsShutdownHelper.Lang
 
                 // Modal
                 ModalTitleNewAction = "Новое действие",
+                ModalTitleEditAction = "Редактировать действие",
+                MainButtonEditAction = "Обновить действие",
 
             };
             return lang;

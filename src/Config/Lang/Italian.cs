@@ -39,6 +39,8 @@ namespace WindowsShutdownHelper.Lang
                 MessageTitleWarn = "Avviso",
                 MessageTitleError = "Errore",
                 MessageContentActionDeleted = "Azione eliminata con successo",
+                MessageContentActionUpdated = "Azione aggiornata con successo",
+                MessageContentConfirmDeleteAction = "Sei sicuro di voler eliminare questa azione?",
                 MessageContentActionAllDeleted = "Tutte le azioni eliminate con successo",
                 MessageContentActionCreated = "Azione creata con successo",
                 MessageContentActionChoose = "Selezione incompleta, correggere",
@@ -52,6 +54,7 @@ namespace WindowsShutdownHelper.Lang
                 LogViewerFormName = "Visualizzatore Log",
                 MessageContentNoLog = "Nessun log al momento",
                 ContextMenuStripMainGridDeleteSelectedAction = "Elimina azione selezionata",
+                ContextMenuStripMainGridEditSelectedAction = "Modifica azione selezionata",
                 ContextMenuStripMainGridDeleteAllAction = "Elimina tutte le azioni",
                 ContextMenuStripNotifyIconAddNewAction = "Crea Nuova Azione",
                 ContextMenuStripNotifyIconShowSettings = "Impostazioni",
@@ -158,6 +161,8 @@ namespace WindowsShutdownHelper.Lang
 
                 // Modal
                 ModalTitleNewAction = "Nuova Azione",
+                ModalTitleEditAction = "Modifica Azione",
+                MainButtonEditAction = "Aggiorna Azione",
 
             };
             return lang;

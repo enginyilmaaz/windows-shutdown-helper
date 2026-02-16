@@ -129,6 +129,12 @@ const App = {
             }
         });
 
+        Bridge.on('updateActionResult', function (data) {
+            if (data && data.success) {
+                self.closeModal();
+            }
+        });
+
         // ─── Tab bar filtering ───
         document.querySelectorAll('.tab-item[data-filter]').forEach(function (tab) {
             tab.addEventListener('click', function () {
@@ -380,8 +386,33 @@ const App = {
             modalTitle.textContent = L('ModalTitleNewAction') || 'New Action';
 
             var modalBody = document.getElementById('modal-body');
-            modalBody.innerHTML = mainPage.renderForm();
-            mainPage.afterRenderForm(modalBody);
+            modalBody.innerHTML = mainPage.renderForm({ mode: 'add' });
+            mainPage.afterRenderForm(modalBody, { mode: 'add' });
+
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }).catch(function () {
+            self._showPageLoadError();
+        });
+    },
+
+    openEditActionModal(editableAction) {
+        var self = this;
+        if (!editableAction || editableAction.index < 0) return;
+
+        this.ensurePageLoaded('main').then(function (mainPage) {
+            if (!mainPage || !mainPage.renderForm || !mainPage.afterRenderForm) return;
+
+            var L = Bridge.lang.bind(Bridge);
+            var modalTitle = document.getElementById('modal-title');
+            modalTitle.textContent = L('ModalTitleEditAction') || (L('ContextMenuStripMainGridEditSelectedAction') || 'Edit Action');
+
+            var modalBody = document.getElementById('modal-body');
+            modalBody.innerHTML = mainPage.renderForm({ mode: 'edit' });
+            mainPage.afterRenderForm(modalBody, {
+                mode: 'edit',
+                index: editableAction.index,
+                initialData: editableAction
+            });
 
             document.getElementById('modal-overlay').classList.remove('hidden');
         }).catch(function () {

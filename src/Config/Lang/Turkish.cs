@@ -39,6 +39,8 @@
                 MessageTitleWarn = "Uyarı",
                 MessageTitleError = "Hata",
                 MessageContentActionDeleted = "Görev silme başarılı",
+                MessageContentActionUpdated = "Görev güncelleme başarılı",
+                MessageContentConfirmDeleteAction = "Bu görevi silmek istediğine emin misin?",
                 MessageContentActionAllDeleted = "Tüm görevler başarıyla silindi",
                 MessageContentActionCreated = "Görev ekleme başarılı",
                 MessageContentActionChoose = "Eksik seçim yaptınız, düzeltin",
@@ -51,6 +53,7 @@
                 LogViewerFormName = "Kayıt Görüntüleyici",
                 MessageContentNoLog = "Şuan için hiç kayıt yok",
                 ContextMenuStripMainGridDeleteSelectedAction = "Seçili görevi sil",
+                ContextMenuStripMainGridEditSelectedAction = "Seçili görevi düzenle",
                 ContextMenuStripMainGridDeleteAllAction = "Tüm görevleri sil",
                 ContextMenuStripNotifyIconAddNewAction = "Yeni Görev Oluştur",
                 ContextMenuStripNotifyIconShowSettings = "Ayarlar",
@@ -159,6 +162,8 @@
 
                 // Modal
                 ModalTitleNewAction = "Yeni Görev",
+                ModalTitleEditAction = "Görevi Düzenle",
+                MainButtonEditAction = "Güncelle",
 
             };
 
