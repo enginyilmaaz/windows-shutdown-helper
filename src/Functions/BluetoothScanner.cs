@@ -22,9 +22,13 @@ namespace WindowsShutdownHelper.Functions
         private static BluetoothLEAdvertisementWatcher _discoveryWatcher;
         private static BluetoothLEAdvertisementWatcher _monitorWatcher;
         private static DeviceWatcher _classicBtWatcher;
+        private static DeviceWatcher _classicMonitorWatcher;
+        private static Timer _classicMonitorHeartbeatTimer;
 
         private static readonly ConcurrentDictionary<ulong, BleDeviceInfo> _discoveredDevices = new();
         private static readonly ConcurrentDictionary<ulong, DateTime> _monitorLastSeen = new();
+        private static readonly ConcurrentDictionary<string, ulong> _classicMonitorIdToAddress = new();
+        private static readonly ConcurrentDictionary<ulong, byte> _classicMonitorPresent = new();
 
         private static readonly object _discoveryLock = new();
         private static readonly object _monitorLock = new();
@@ -181,6 +185,8 @@ namespace WindowsShutdownHelper.Functions
                 Interlocked.Increment(ref _discoveryVersion);
             }
 
+            _monitorLastSeen[args.BluetoothAddress] = info.LastSeen;
+
             if (!string.IsNullOrEmpty(name))
             {
                 DeviceDiscovered?.Invoke(info);
@@ -250,6 +256,7 @@ namespace WindowsShutdownHelper.Functions
                 Interlocked.Increment(ref _discoveryVersion);
             }
 
+            _monitorLastSeen[macLong] = deviceInfo.LastSeen;
             DeviceDiscovered?.Invoke(deviceInfo);
         }
 
@@ -268,6 +275,9 @@ namespace WindowsShutdownHelper.Functions
 
                 _monitorWatcher.Received += OnMonitorReceived;
                 _monitorWatcher.Start();
+
+                StartClassicMonitoringLocked();
+                StartClassicMonitorHeartbeatLocked();
                 _isMonitoring = true;
             }
         }
@@ -285,7 +295,12 @@ namespace WindowsShutdownHelper.Functions
                     _monitorWatcher = null;
                 }
 
+                StopClassicMonitoringLocked();
+                StopClassicMonitorHeartbeatLocked();
+
                 _monitorLastSeen.Clear();
+                _classicMonitorIdToAddress.Clear();
+                _classicMonitorPresent.Clear();
                 _isMonitoring = false;
             }
         }
@@ -326,6 +341,189 @@ namespace WindowsShutdownHelper.Functions
             BluetoothLEAdvertisementReceivedEventArgs args)
         {
             _monitorLastSeen[args.BluetoothAddress] = DateTime.Now;
+        }
+
+        private static void StartClassicMonitoringLocked()
+        {
+            try
+            {
+                if (_classicMonitorWatcher != null)
+                {
+                    return;
+                }
+
+                string selector = "System.Devices.Aep.ProtocolId:=\"" + ClassicBtProtocolId + "\"";
+                var requestedProps = new string[]
+                {
+                    "System.Devices.Aep.DeviceAddress",
+                    "System.Devices.Aep.IsPresent"
+                };
+
+                _classicMonitorWatcher = DeviceInformation.CreateWatcher(
+                    selector, requestedProps, DeviceInformationKind.AssociationEndpoint);
+
+                _classicMonitorWatcher.Added += OnClassicMonitorAdded;
+                _classicMonitorWatcher.Updated += OnClassicMonitorUpdated;
+                _classicMonitorWatcher.Removed += OnClassicMonitorRemoved;
+                _classicMonitorWatcher.Start();
+            }
+            catch
+            {
+                _classicMonitorWatcher = null;
+            }
+        }
+
+        private static void StopClassicMonitoringLocked()
+        {
+            if (_classicMonitorWatcher == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _classicMonitorWatcher.Added -= OnClassicMonitorAdded;
+                _classicMonitorWatcher.Updated -= OnClassicMonitorUpdated;
+                _classicMonitorWatcher.Removed -= OnClassicMonitorRemoved;
+                _classicMonitorWatcher.Stop();
+            }
+            catch
+            {
+            }
+
+            _classicMonitorWatcher = null;
+        }
+
+        private static void OnClassicMonitorAdded(DeviceWatcher sender, DeviceInformation info)
+        {
+            UpdateClassicMonitorPresence(info.Id, info.Properties, isPresentFallback: true);
+        }
+
+        private static void OnClassicMonitorUpdated(DeviceWatcher sender, DeviceInformationUpdate update)
+        {
+            UpdateClassicMonitorPresence(update.Id, update.Properties, isPresentFallback: null);
+        }
+
+        private static void OnClassicMonitorRemoved(DeviceWatcher sender, DeviceInformationUpdate update)
+        {
+            if (update == null || string.IsNullOrWhiteSpace(update.Id))
+            {
+                return;
+            }
+
+            if (_classicMonitorIdToAddress.TryGetValue(update.Id, out ulong address) && address != 0)
+            {
+                _classicMonitorPresent.TryRemove(address, out _);
+            }
+        }
+
+        private static void UpdateClassicMonitorPresence(
+            string deviceId,
+            IReadOnlyDictionary<string, object> properties,
+            bool? isPresentFallback)
+        {
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                return;
+            }
+
+            if (!_classicMonitorIdToAddress.TryGetValue(deviceId, out ulong address) || address == 0)
+            {
+                if (properties != null &&
+                    properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object addrObj))
+                {
+                    address = MacStringToUlong(addrObj?.ToString() ?? string.Empty);
+                    if (address != 0)
+                    {
+                        _classicMonitorIdToAddress[deviceId] = address;
+                    }
+                }
+            }
+
+            if (address == 0)
+            {
+                return;
+            }
+
+            bool hasPresence = false;
+            bool isPresent = false;
+            if (properties != null &&
+                properties.TryGetValue("System.Devices.Aep.IsPresent", out object presentObj) &&
+                presentObj != null)
+            {
+                if (presentObj is bool boolValue)
+                {
+                    isPresent = boolValue;
+                    hasPresence = true;
+                }
+                else if (bool.TryParse(presentObj.ToString(), out bool parsed))
+                {
+                    isPresent = parsed;
+                    hasPresence = true;
+                }
+            }
+
+            if (!hasPresence)
+            {
+                if (isPresentFallback.HasValue)
+                {
+                    isPresent = isPresentFallback.Value;
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            if (isPresent)
+            {
+                _classicMonitorPresent[address] = 1;
+                _monitorLastSeen[address] = DateTime.Now;
+            }
+            else
+            {
+                _classicMonitorPresent.TryRemove(address, out _);
+            }
+        }
+
+        private static void StartClassicMonitorHeartbeatLocked()
+        {
+            if (_classicMonitorHeartbeatTimer != null)
+            {
+                return;
+            }
+
+            _classicMonitorHeartbeatTimer = new Timer(_ =>
+            {
+                if (!_isMonitoring)
+                {
+                    return;
+                }
+
+                DateTime now = DateTime.Now;
+                foreach (ulong address in _classicMonitorPresent.Keys)
+                {
+                    _monitorLastSeen[address] = now;
+                }
+            }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+
+        private static void StopClassicMonitorHeartbeatLocked()
+        {
+            if (_classicMonitorHeartbeatTimer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _classicMonitorHeartbeatTimer.Dispose();
+            }
+            catch
+            {
+            }
+
+            _classicMonitorHeartbeatTimer = null;
         }
 
         // ---------- Helpers ----------

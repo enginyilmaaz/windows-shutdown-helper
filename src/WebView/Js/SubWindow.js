@@ -177,6 +177,8 @@
         closeModal: function () {
             var modalOverlay = document.getElementById('modal-overlay');
             if (modalOverlay) {
+                Bridge.send('stopBluetoothScan', {});
+                Bridge.off('bluetoothScanResult');
                 modalOverlay.classList.add('hidden');
             }
         }
