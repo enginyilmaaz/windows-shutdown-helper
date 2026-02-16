@@ -23,7 +23,7 @@ namespace WindowsShutdownHelper
 
             // webView
             this.webView.AllowExternalDrop = false;
-            this.webView.DefaultBackgroundColor = System.Drawing.Color.Ivory;
+            this.webView.DefaultBackgroundColor = System.Drawing.Color.White;
             this.webView.Dock = System.Windows.Forms.DockStyle.Fill;
             this.webView.Location = new System.Drawing.Point(0, 0);
             this.webView.Name = "webView";

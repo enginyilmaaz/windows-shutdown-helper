@@ -25,6 +25,8 @@ namespace WindowsShutdownHelper
         private bool _timerStarted;
         private Panel _loadingOverlay;
         private Label _loadingLabel;
+        private Timer _loadingDelayTimer;
+        private const int LoadingOverlayDelayMs = 350;
         private Point dragStartCursor;
         private Point dragStartForm;
         private bool dragging;
@@ -139,6 +141,20 @@ namespace WindowsShutdownHelper
 
         private void InitializeLoadingOverlay()
         {
+            _loadingDelayTimer = new Timer
+            {
+                Interval = LoadingOverlayDelayMs
+            };
+            _loadingDelayTimer.Tick += (s, e) =>
+            {
+                _loadingDelayTimer.Stop();
+                if (!_timerStarted && _loadingOverlay != null)
+                {
+                    _loadingOverlay.Visible = true;
+                    _loadingOverlay.BringToFront();
+                }
+            };
+
             _loadingLabel = new Label
             {
                 Dock = DockStyle.Fill,
@@ -156,6 +172,7 @@ namespace WindowsShutdownHelper
 
             _loadingOverlay.Controls.Add(_loadingLabel);
             Controls.Add(_loadingOverlay);
+            _loadingOverlay.Visible = false;
             _loadingOverlay.BringToFront();
         }
 
@@ -163,13 +180,15 @@ namespace WindowsShutdownHelper
         {
             if (_loadingOverlay == null) return;
             _loadingLabel.Text = language?.common_loading ?? "Yükleniyor...";
-            _loadingOverlay.Visible = true;
-            _loadingOverlay.BringToFront();
+            _loadingOverlay.Visible = false;
+            _loadingDelayTimer?.Stop();
+            _loadingDelayTimer?.Start();
         }
 
         private void HideLoadingOverlay()
         {
             if (_loadingOverlay == null) return;
+            _loadingDelayTimer?.Stop();
             _loadingOverlay.Visible = false;
         }
 
