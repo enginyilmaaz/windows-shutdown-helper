@@ -343,22 +343,28 @@ namespace WindowsShutdownHelper
             {
                 language = langDict,
                 actions = displayActions,
-                settings = new
-                {
-                    logsEnabled = settingsObj.LogsEnabled,
-                    startWithWindows = settingsObj.StartWithWindows,
-                    runInTaskbarWhenClosed = settingsObj.RunInTaskbarWhenClosed,
-                    isCountdownNotifierEnabled = settingsObj.IsCountdownNotifierEnabled,
-                    countdownNotifierSeconds = settingsObj.CountdownNotifierSeconds,
-                    language = settingsObj.Language,
-                    theme = settingsObj.Theme,
-                    bluetoothThresholdSeconds = settingsObj.BluetoothThresholdSeconds > 0 ? settingsObj.BluetoothThresholdSeconds : 5,
-                    appVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString(),
-                    buildId = BuildInfo.CommitId
-                }
+                settings = BuildSettingsPayload(settingsObj)
             };
 
             PostMessage("init", initData);
+        }
+
+        private object BuildSettingsPayload(Settings settings)
+        {
+            var resolved = settings ?? Config.SettingsINI.DefaulSettingFile();
+            return new
+            {
+                logsEnabled = resolved.LogsEnabled,
+                startWithWindows = resolved.StartWithWindows,
+                runInTaskbarWhenClosed = resolved.RunInTaskbarWhenClosed,
+                isCountdownNotifierEnabled = resolved.IsCountdownNotifierEnabled,
+                countdownNotifierSeconds = resolved.CountdownNotifierSeconds,
+                language = resolved.Language,
+                theme = resolved.Theme,
+                bluetoothThresholdSeconds = resolved.BluetoothThresholdSeconds > 0 ? resolved.BluetoothThresholdSeconds : 5,
+                appVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString(),
+                buildId = BuildInfo.CommitId
+            };
         }
 
         private List<Dictionary<string, string>> GetTranslatedActions()
@@ -942,7 +948,8 @@ namespace WindowsShutdownHelper
 
         private void HandleLoadSettings()
         {
-            PostMessage("settingsLoaded", _cachedSettings ?? LoadSettings());
+            var settingsObj = _cachedSettings ?? LoadSettings();
+            PostMessage("settingsLoaded", BuildSettingsPayload(settingsObj));
         }
 
         private void HandleLoadLogs()
