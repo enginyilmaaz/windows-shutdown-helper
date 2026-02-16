@@ -242,10 +242,9 @@ window.MainPage = {
                 '</select>' +
                 '<input type="time" id="inp-time" class="form-input form-input-small" style="display:none">' +
                 '<div id="bt-panel" style="display:none">' +
-                    '<button type="button" class="btn btn-secondary" id="btn-bt-scan">' + (L('BluetoothScanButton') || 'Scan Devices') + '</button>' +
-                    '<span id="bt-scan-status" style="margin-left:8px;font-size:0.85em;color:var(--text-secondary,#888);display:none"></span>' +
-                    '<select id="sel-bt-device" class="form-select" style="display:none;margin-top:6px">' +
+                    '<select id="sel-bt-device" class="form-select">' +
                         '<option value="">' + (L('BluetoothSelectDevice') || 'Select a device') + '</option>' +
+                        '<option value="__scan__">' + (L('BluetoothScanButton') || 'Scan Devices') + '</option>' +
                     '</select>' +
                     '<input type="hidden" id="inp-bt-mac" value="">' +
                     '<input type="hidden" id="inp-bt-name" value="">' +
@@ -315,68 +314,64 @@ window.MainPage = {
             updateTriggerInputs();
         });
 
-        // Bluetooth scan button
-        container.querySelector('#btn-bt-scan').addEventListener('click', function () {
-            var btnScan = container.querySelector('#btn-bt-scan');
-            var status = container.querySelector('#bt-scan-status');
-            var selDevice = container.querySelector('#sel-bt-device');
-            var L = Bridge.lang.bind(Bridge);
-
-            btnScan.disabled = true;
-            status.style.display = '';
-            status.textContent = L('BluetoothScanning') || 'Scanning...';
-            selDevice.style.display = 'none';
-
-            // Clear previous options except placeholder
-            while (selDevice.options.length > 1) {
-                selDevice.remove(1);
-            }
-
-            // Remove previous listener if any
-            if (btScanListener) {
-                Bridge.off('bluetoothScanResult', btScanListener);
-            }
-
-            var seenMacs = {};
-            btScanListener = function (devices) {
-                if (!devices || !devices.length) return;
-                for (var i = 0; i < devices.length; i++) {
-                    var d = devices[i];
-                    if (!d.mac || seenMacs[d.mac]) continue;
-                    seenMacs[d.mac] = true;
-                    var opt = document.createElement('option');
-                    opt.value = d.mac;
-                    opt.textContent = (d.name || d.mac) + ' (' + d.mac + ')';
-                    opt.setAttribute('data-name', d.name || '');
-                    selDevice.appendChild(opt);
-                }
-                if (selDevice.options.length > 1) {
-                    selDevice.style.display = '';
-                }
-            };
-
-            Bridge.on('bluetoothScanResult', btScanListener);
-            Bridge.send('startBluetoothScan', {});
-
-            // Stop scan after 10 seconds
-            setTimeout(function () {
-                Bridge.send('stopBluetoothScan', {});
-                btnScan.disabled = false;
-                if (selDevice.options.length <= 1) {
-                    status.textContent = L('BluetoothNoDeviceFound') || 'No device found';
-                } else {
-                    status.style.display = 'none';
-                }
-            }, 10000);
-        });
-
-        // Bluetooth device select
+        // Bluetooth device select & scan trigger
         container.querySelector('#sel-bt-device').addEventListener('change', function () {
             var selDevice = container.querySelector('#sel-bt-device');
             var inpMac = container.querySelector('#inp-bt-mac');
             var inpName = container.querySelector('#inp-bt-name');
-            var selected = selDevice.options[selDevice.selectedIndex];
+            var L = Bridge.lang.bind(Bridge);
 
+            if (selDevice.value === '__scan__') {
+                // Trigger scan from dropdown
+                var scanOpt = selDevice.querySelector('option[value="__scan__"]');
+                if (scanOpt) scanOpt.textContent = L('BluetoothScanning') || 'Scanning...';
+                selDevice.value = '';
+                inpMac.value = '';
+                inpName.value = '';
+
+                // Clear previously found devices (keep placeholder + scan option)
+                while (selDevice.options.length > 2) {
+                    selDevice.remove(2);
+                }
+
+                if (btScanListener) {
+                    Bridge.off('bluetoothScanResult', btScanListener);
+                }
+
+                var seenMacs = {};
+                btScanListener = function (devices) {
+                    if (!devices || !devices.length) return;
+                    for (var i = 0; i < devices.length; i++) {
+                        var d = devices[i];
+                        if (!d.mac || seenMacs[d.mac]) continue;
+                        seenMacs[d.mac] = true;
+                        var opt = document.createElement('option');
+                        opt.value = d.mac;
+                        opt.textContent = (d.name || d.mac) + ' (' + d.mac + ')';
+                        opt.setAttribute('data-name', d.name || '');
+                        selDevice.appendChild(opt);
+                    }
+                };
+
+                Bridge.on('bluetoothScanResult', btScanListener);
+                Bridge.send('startBluetoothScan', {});
+
+                setTimeout(function () {
+                    Bridge.send('stopBluetoothScan', {});
+                    if (scanOpt) scanOpt.textContent = L('BluetoothScanButton') || 'Scan Devices';
+                    if (selDevice.options.length <= 2) {
+                        var noDevOpt = document.createElement('option');
+                        noDevOpt.value = '';
+                        noDevOpt.textContent = L('BluetoothNoDeviceFound') || 'No device found';
+                        noDevOpt.disabled = true;
+                        selDevice.appendChild(noDevOpt);
+                    }
+                }, 10000);
+                return;
+            }
+
+            // Normal device selection
+            var selected = selDevice.options[selDevice.selectedIndex];
             inpMac.value = selDevice.value || '';
             inpName.value = selected ? (selected.getAttribute('data-name') || '') : '';
         });
@@ -410,7 +405,6 @@ window.MainPage = {
                     opt.setAttribute('data-name', initialData.bluetoothName || '');
                     selDevice.appendChild(opt);
                     selDevice.value = initialData.bluetoothMac;
-                    selDevice.style.display = '';
                 }
             }
         } else {

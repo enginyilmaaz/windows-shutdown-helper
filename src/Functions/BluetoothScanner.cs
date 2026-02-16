@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Windows.Devices.Bluetooth.Advertisement;
+using Windows.Devices.Enumeration;
 
 namespace WindowsShutdownHelper.Functions
 {
@@ -19,6 +20,7 @@ namespace WindowsShutdownHelper.Functions
     {
         private static BluetoothLEAdvertisementWatcher _discoveryWatcher;
         private static BluetoothLEAdvertisementWatcher _monitorWatcher;
+        private static DeviceWatcher _classicBtWatcher;
 
         private static readonly ConcurrentDictionary<ulong, BleDeviceInfo> _discoveredDevices = new();
         private static readonly ConcurrentDictionary<ulong, DateTime> _monitorLastSeen = new();
@@ -31,6 +33,9 @@ namespace WindowsShutdownHelper.Functions
 
         public static event Action<BleDeviceInfo> DeviceDiscovered;
 
+        // Bluetooth Classic protocol ID for DeviceWatcher
+        private const string ClassicBtProtocolId = "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}";
+
         // ---------- Discovery Scan (UI device list) ----------
 
         public static void StartDiscoveryScan()
@@ -41,6 +46,7 @@ namespace WindowsShutdownHelper.Functions
 
                 _discoveredDevices.Clear();
 
+                // BLE advertisement watcher
                 _discoveryWatcher = new BluetoothLEAdvertisementWatcher
                 {
                     ScanningMode = BluetoothLEScanningMode.Active
@@ -48,6 +54,25 @@ namespace WindowsShutdownHelper.Functions
 
                 _discoveryWatcher.Received += OnDiscoveryReceived;
                 _discoveryWatcher.Start();
+
+                // Classic Bluetooth device watcher
+                try
+                {
+                    string selector = "System.Devices.Aep.ProtocolId:=\"" + ClassicBtProtocolId + "\"";
+                    var requestedProps = new string[] { "System.Devices.Aep.DeviceAddress" };
+                    _classicBtWatcher = DeviceInformation.CreateWatcher(
+                        selector, requestedProps, DeviceInformationKind.AssociationEndpoint);
+
+                    _classicBtWatcher.Added += OnClassicDeviceAdded;
+                    _classicBtWatcher.Updated += OnClassicDeviceUpdated;
+                    _classicBtWatcher.Start();
+                }
+                catch
+                {
+                    // Classic BT not available, continue with BLE only
+                    _classicBtWatcher = null;
+                }
+
                 _isDiscovering = true;
             }
         }
@@ -63,6 +88,18 @@ namespace WindowsShutdownHelper.Functions
                     _discoveryWatcher.Received -= OnDiscoveryReceived;
                     _discoveryWatcher.Stop();
                     _discoveryWatcher = null;
+                }
+
+                if (_classicBtWatcher != null)
+                {
+                    try
+                    {
+                        _classicBtWatcher.Added -= OnClassicDeviceAdded;
+                        _classicBtWatcher.Updated -= OnClassicDeviceUpdated;
+                        _classicBtWatcher.Stop();
+                    }
+                    catch { }
+                    _classicBtWatcher = null;
                 }
 
                 _isDiscovering = false;
@@ -110,6 +147,57 @@ namespace WindowsShutdownHelper.Functions
             {
                 DeviceDiscovered?.Invoke(info);
             }
+        }
+
+        private static void OnClassicDeviceAdded(DeviceWatcher sender, DeviceInformation info)
+        {
+            AddClassicDevice(info);
+        }
+
+        private static void OnClassicDeviceUpdated(DeviceWatcher sender, DeviceInformationUpdate update)
+        {
+            // Update is mainly for connection state changes, ignore for discovery
+        }
+
+        private static void AddClassicDevice(DeviceInformation info)
+        {
+            string name = info.Name;
+            if (string.IsNullOrEmpty(name)) return;
+
+            string deviceAddress = "";
+            if (info.Properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object addr))
+            {
+                deviceAddress = addr?.ToString() ?? "";
+            }
+
+            if (string.IsNullOrEmpty(deviceAddress)) return;
+
+            ulong macLong = MacStringToUlong(deviceAddress);
+            if (macLong == 0) return;
+
+            var deviceInfo = new BleDeviceInfo
+            {
+                BluetoothAddress = macLong,
+                MacAddress = FormatMacAddress(macLong),
+                LocalName = name,
+                RssiDbm = 0,
+                LastSeen = DateTime.Now
+            };
+
+            _discoveredDevices.AddOrUpdate(
+                macLong,
+                deviceInfo,
+                (key, existing) =>
+                {
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        existing.LocalName = name;
+                    }
+                    existing.LastSeen = DateTime.Now;
+                    return existing;
+                });
+
+            DeviceDiscovered?.Invoke(deviceInfo);
         }
 
         // ---------- Background Monitoring ----------
