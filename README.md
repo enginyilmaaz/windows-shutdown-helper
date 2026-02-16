@@ -24,6 +24,7 @@ Get the latest installer from the [Releases](https://github.com/enginyilmaaz/Win
 - **System Idle** - Triggers after the system has been idle for a specified duration
 - **Countdown (From Now)** - Triggers after a specified amount of time from creation
 - **Every Day by Hour (Certain Time)** - Triggers daily at a specific time
+- **Bluetooth Device Not Reachable** - Triggers when a selected BLE device goes out of range (no pairing required)
 
 ### General
 - Up to 5 concurrent actions
@@ -44,7 +45,7 @@ Get the latest installer from the [Releases](https://github.com/enginyilmaaz/Win
 
 | Component | Technology |
 |-----------|------------|
-| Runtime | .NET 8.0 (Windows) |
+| Runtime | .NET 8.0 (Windows 10+) |
 | UI Framework | WinForms + WebView2 |
 | Frontend | HTML / CSS / JavaScript (SPA) |
 | UI Font | Material Icons (Round) |
@@ -77,6 +78,7 @@ WindowsShutdownHelper/
 │   │       └── Italian.cs
 │   ├── Functions/
 │   │   ├── Actions.cs                # System action execution (Win32 API calls)
+│   │   ├── BluetoothScanner.cs       # BLE device scanning and monitoring (WinRT)
 │   │   ├── SystemIdleDetector.cs     # User idle time detection (Win32 API)
 │   │   ├── DetectScreen.cs           # Session lock/unlock detection
 │   │   ├── NotifySystem.cs           # Countdown notification logic
