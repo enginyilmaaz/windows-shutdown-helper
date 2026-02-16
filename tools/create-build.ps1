@@ -143,5 +143,5 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  BUILD SUCCEEDED" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
-Write-Host "  Output: bin/$Configuration/net8.0-windows/win-x64/" -ForegroundColor White
+Write-Host "  Output: bin/$Configuration/net8.0-windows/" -ForegroundColor White
 Write-Host ""
