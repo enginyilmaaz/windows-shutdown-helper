@@ -45,16 +45,40 @@ Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 [CustomMessages]
 english.StartWithWindows=Start with Windows
 english.OtherOptions=Other options:
+english.PreserveDataTitle=Preserve Existing Data
+english.PreserveDataDescription=Previous installation data was found in the selected folder.
+english.PreserveDataOption=Keep old settings/tasks/logs (Recommended)
+english.RemoveDataOnUninstall=Also delete user data (settings, tasks, logs)?
 turkish.StartWithWindows=Windows ile birlikte başlat
 turkish.OtherOptions=Diğer seçenekler:
+turkish.PreserveDataTitle=Var olan verileri koru
+turkish.PreserveDataDescription=Seçili klasörde önceki kurulum verileri bulundu.
+turkish.PreserveDataOption=Eski ayar/görev/kayıtları koru (Önerilen)
+turkish.RemoveDataOnUninstall=Kullanıcı verileri de silinsin mi (ayarlar, görevler, kayıtlar)?
 german.StartWithWindows=Mit Windows starten
 german.OtherOptions=Weitere Optionen:
+german.PreserveDataTitle=Vorhandene Daten beibehalten
+german.PreserveDataDescription=Im ausgewählten Ordner wurden Daten einer vorherigen Installation gefunden.
+german.PreserveDataOption=Alte Einstellungen/Aufgaben/Protokolle behalten (Empfohlen)
+german.RemoveDataOnUninstall=Benutzerdaten (Einstellungen, Aufgaben, Protokolle) ebenfalls löschen?
 french.StartWithWindows=Démarrer avec Windows
 french.OtherOptions=Autres options :
+french.PreserveDataTitle=Conserver les données existantes
+french.PreserveDataDescription=Des données d'une installation précédente ont été trouvées dans le dossier sélectionné.
+french.PreserveDataOption=Conserver les anciens paramètres/tâches/journaux (Recommandé)
+french.RemoveDataOnUninstall=Supprimer également les données utilisateur (paramètres, tâches, journaux) ?
 russian.StartWithWindows=Запускать вместе с Windows
 russian.OtherOptions=Другие параметры:
+russian.PreserveDataTitle=Сохранить существующие данные
+russian.PreserveDataDescription=В выбранной папке найдены данные предыдущей установки.
+russian.PreserveDataOption=Сохранить старые настройки/задачи/журналы (Рекомендуется)
+russian.RemoveDataOnUninstall=Удалить также пользовательские данные (настройки, задачи, журналы)?
 italian.StartWithWindows=Avvia con Windows
 italian.OtherOptions=Altre opzioni:
+italian.PreserveDataTitle=Mantieni i dati esistenti
+italian.PreserveDataDescription=Nella cartella selezionata sono stati trovati dati di una precedente installazione.
+italian.PreserveDataOption=Mantieni vecchie impostazioni/attività/log (Consigliato)
+italian.RemoveDataOnUninstall=Eliminare anche i dati utente (impostazioni, attività, log)?
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -62,12 +86,12 @@ Name: "startupentry"; Description: "{cm:StartWithWindows}"; GroupDescription: "{
 
 [Files]
 #ifexist "bin\Release\net8.0-windows\win-x64\publish\Windows Shutdown Helper.exe"
-Source: "bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: Is64BitInstallMode
-Source: "bin\Release\net8.0-windows\win-x86\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Check: not Is64BitInstallMode
+Source: "bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "Settings.json,ActionList.json,Logs.json,LastPage.txt,lang\*"; Check: Is64BitInstallMode
+Source: "bin\Release\net8.0-windows\win-x86\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Excludes: "Settings.json,ActionList.json,Logs.json,LastPage.txt,lang\*"; Check: not Is64BitInstallMode
 #else
 #ifexist "bin\Release\net8.0-windows\win-x86\publish\Windows Shutdown Helper.exe"
-Source: "bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Check: Is64BitInstallMode
-Source: "bin\Release\net8.0-windows\win-x86\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: not Is64BitInstallMode
+Source: "bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Excludes: "Settings.json,ActionList.json,Logs.json,LastPage.txt,lang\*"; Check: Is64BitInstallMode
+Source: "bin\Release\net8.0-windows\win-x86\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "Settings.json,ActionList.json,Logs.json,LastPage.txt,lang\*"; Check: not Is64BitInstallMode
 #else
 Source: "bin\Release\net8.0-windows\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "bin\Release\net8.0-windows\WebView\*"; DestDir: "{app}\WebView"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -88,10 +112,102 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-Type: files; Name: "{app}\settings.json"
-Type: files; Name: "{app}\actionList.json"
-Type: files; Name: "{app}\logs.json"
-Type: filesandordirs; Name: "{app}\lang"
-Type: filesandordirs; Name: "{app}\WebView"
-Type: filesandordirs; Name: "{app}\runtimes"
+[Code]
+var
+  PreserveDataPage: TWizardPage;
+  PreserveDataCheckBox: TNewCheckBox;
+  RemoveUserDataOnUninstall: Boolean;
+
+function HasUserData(const RootDir: string): Boolean;
+var
+  BaseDir: string;
+begin
+  BaseDir := AddBackslash(RootDir);
+  Result :=
+    FileExists(BaseDir + 'Settings.json') or
+    FileExists(BaseDir + 'ActionList.json') or
+    FileExists(BaseDir + 'Logs.json') or
+    FileExists(BaseDir + 'LastPage.txt') or
+    DirExists(BaseDir + 'lang');
+end;
+
+procedure DeleteUserData(const RootDir: string);
+var
+  BaseDir: string;
+begin
+  BaseDir := AddBackslash(RootDir);
+  DeleteFile(BaseDir + 'Settings.json');
+  DeleteFile(BaseDir + 'ActionList.json');
+  DeleteFile(BaseDir + 'Logs.json');
+  DeleteFile(BaseDir + 'LastPage.txt');
+  DelTree(BaseDir + 'lang', True, True, True);
+end;
+
+function ShouldPreserveUserData(): Boolean;
+begin
+  Result := True;
+  if PreserveDataCheckBox <> nil then
+  begin
+    Result := PreserveDataCheckBox.Checked;
+  end;
+end;
+
+procedure InitializeWizard();
+begin
+  PreserveDataPage := CreateCustomPage(
+    wpSelectDir,
+    ExpandConstant('{cm:PreserveDataTitle}'),
+    ExpandConstant('{cm:PreserveDataDescription}')
+  );
+
+  PreserveDataCheckBox := TNewCheckBox.Create(PreserveDataPage);
+  PreserveDataCheckBox.Parent := PreserveDataPage.Surface;
+  PreserveDataCheckBox.Left := 0;
+  PreserveDataCheckBox.Top := ScaleY(8);
+  PreserveDataCheckBox.Width := PreserveDataPage.SurfaceWidth;
+  PreserveDataCheckBox.Caption := ExpandConstant('{cm:PreserveDataOption}');
+  PreserveDataCheckBox.Checked := True;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := False;
+  if (PreserveDataPage <> nil) and (PageID = PreserveDataPage.ID) then
+  begin
+    Result := not HasUserData(WizardDirValue);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssInstall) and HasUserData(WizardDirValue) and (not ShouldPreserveUserData()) then
+  begin
+    DeleteUserData(WizardDirValue);
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  UninstallDir: string;
+begin
+  UninstallDir := ExpandConstant('{app}');
+
+  if CurUninstallStep = usUninstall then
+  begin
+    RemoveUserDataOnUninstall := False;
+    if HasUserData(UninstallDir) then
+    begin
+      RemoveUserDataOnUninstall :=
+        MsgBox(
+          ExpandConstant('{cm:RemoveDataOnUninstall}'),
+          mbConfirmation,
+          MB_YESNO or MB_DEFBUTTON2
+        ) = IDYES;
+    end;
+  end;
+
+  if (CurUninstallStep = usPostUninstall) and RemoveUserDataOnUninstall then
+  begin
+    DeleteUserData(UninstallDir);
+  end;
+end;
