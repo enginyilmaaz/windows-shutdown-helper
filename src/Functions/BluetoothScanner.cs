@@ -27,6 +27,7 @@ namespace WindowsAutoPowerManager.Functions
         private static Timer _classicMonitorHeartbeatTimer;
 
         private static readonly ConcurrentDictionary<ulong, BleDeviceInfo> _discoveredDevices = new();
+        private static readonly ConcurrentDictionary<ulong, int> _namelessBleAdvertisementCounts = new();
         private static readonly ConcurrentDictionary<ulong, DateTime> _monitorLastSeen = new();
         private static readonly ConcurrentDictionary<string, ulong> _classicDiscoveryIdToAddress = new();
         private static readonly ConcurrentDictionary<string, ulong> _classicMonitorIdToAddress = new();
@@ -58,6 +59,7 @@ namespace WindowsAutoPowerManager.Functions
                 if (_isDiscovering) return;
 
                 _discoveredDevices.Clear();
+                _namelessBleAdvertisementCounts.Clear();
                 _classicDiscoveryIdToAddress.Clear();
                 Interlocked.Increment(ref _discoveryVersion);
 
@@ -77,7 +79,8 @@ namespace WindowsAutoPowerManager.Functions
                     var requestedProps = new string[]
                     {
                         "System.Devices.Aep.DeviceAddress",
-                        "System.ItemNameDisplay"
+                        "System.ItemNameDisplay",
+                        "System.Devices.Aep.IsPaired"
                     };
                     _classicBtWatcher = DeviceInformation.CreateWatcher(
                         selector, requestedProps, DeviceInformationKind.AssociationEndpoint);
@@ -93,6 +96,10 @@ namespace WindowsAutoPowerManager.Functions
                 }
 
                 _isDiscovering = true;
+
+                // Seed paired classic devices immediately so phones that do not actively advertise
+                // can still appear in the device list.
+                _ = RefreshClassicDiscoverySnapshotAsync();
             }
         }
 
@@ -122,6 +129,7 @@ namespace WindowsAutoPowerManager.Functions
                 }
 
                 _classicDiscoveryIdToAddress.Clear();
+                _namelessBleAdvertisementCounts.Clear();
                 _isDiscovering = false;
                 Interlocked.Increment(ref _discoveryVersion);
             }
@@ -154,6 +162,21 @@ namespace WindowsAutoPowerManager.Functions
             BluetoothLEAdvertisementReceivedEventArgs args)
         {
             string name = args.Advertisement.LocalName;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                int seenCount = _namelessBleAdvertisementCounts.AddOrUpdate(
+                    args.BluetoothAddress,
+                    1,
+                    (_, existing) => existing + 1);
+                if (seenCount >= 3)
+                {
+                    name = FormatMacAddress(args.BluetoothAddress);
+                }
+            }
+            else
+            {
+                _namelessBleAdvertisementCounts.TryRemove(args.BluetoothAddress, out _);
+            }
 
             var info = new BleDeviceInfo
             {
@@ -285,6 +308,50 @@ namespace WindowsAutoPowerManager.Functions
             }
 
             DeviceDiscovered?.Invoke(deviceInfo);
+        }
+
+        private static async Task RefreshClassicDiscoverySnapshotAsync()
+        {
+            try
+            {
+                string selector = "System.Devices.Aep.ProtocolId:=\"" + ClassicBtProtocolId + "\"";
+                var requestedProps = new string[]
+                {
+                    "System.Devices.Aep.DeviceAddress",
+                    "System.ItemNameDisplay",
+                    "System.Devices.Aep.IsPaired"
+                };
+
+                DeviceInformationCollection devices = await DeviceInformation.FindAllAsync(
+                    selector,
+                    requestedProps,
+                    DeviceInformationKind.AssociationEndpoint);
+
+                if (!_isDiscovering)
+                {
+                    return;
+                }
+
+                foreach (DeviceInformation device in devices)
+                {
+                    bool includeDevice = true;
+                    if (TryGetBoolProperty(device.Properties, "System.Devices.Aep.IsPaired", out bool isPaired))
+                    {
+                        includeDevice = isPaired;
+                    }
+
+                    if (!includeDevice)
+                    {
+                        continue;
+                    }
+
+                    AddOrUpdateClassicDevice(device.Id, device.Name, device.Properties);
+                }
+            }
+            catch
+            {
+                // Snapshot is best-effort. Discovery watcher continues to run.
+            }
         }
 
         private static string ResolveClassicDeviceName(
