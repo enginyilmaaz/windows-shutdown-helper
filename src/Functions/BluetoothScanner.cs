@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Enumeration;
 
@@ -29,6 +30,8 @@ namespace WindowsShutdownHelper.Functions
         private static readonly ConcurrentDictionary<ulong, DateTime> _monitorLastSeen = new();
         private static readonly ConcurrentDictionary<string, ulong> _classicMonitorIdToAddress = new();
         private static readonly ConcurrentDictionary<ulong, byte> _classicMonitorPresent = new();
+        private static int _classicPresenceRefreshInProgress;
+        private static long _lastClassicPresenceRefreshTick = -ClassicPresenceRefreshIntervalMs;
 
         private static readonly object _discoveryLock = new();
         private static readonly object _monitorLock = new();
@@ -41,6 +44,7 @@ namespace WindowsShutdownHelper.Functions
 
         // Bluetooth Classic protocol ID for DeviceWatcher
         private const string ClassicBtProtocolId = "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}";
+        private const int ClassicPresenceRefreshIntervalMs = 5000;
 
         // ---------- Discovery Scan (UI device list) ----------
 
@@ -274,8 +278,9 @@ namespace WindowsShutdownHelper.Functions
                 _monitorWatcher.Start();
 
                 StartClassicMonitoringLocked();
-                StartClassicMonitorHeartbeatLocked();
                 _isMonitoring = true;
+                StartClassicMonitorHeartbeatLocked();
+                ScheduleClassicPresenceRefresh(force: true);
             }
         }
 
@@ -298,6 +303,8 @@ namespace WindowsShutdownHelper.Functions
                 _monitorLastSeen.Clear();
                 _classicMonitorIdToAddress.Clear();
                 _classicMonitorPresent.Clear();
+                Interlocked.Exchange(ref _classicPresenceRefreshInProgress, 0);
+                Interlocked.Exchange(ref _lastClassicPresenceRefreshTick, -ClassicPresenceRefreshIntervalMs);
                 _isMonitoring = false;
             }
         }
@@ -393,7 +400,7 @@ namespace WindowsShutdownHelper.Functions
 
         private static void OnClassicMonitorAdded(DeviceWatcher sender, DeviceInformation info)
         {
-            UpdateClassicMonitorPresence(info.Id, info.Properties, isPresentFallback: true);
+            UpdateClassicMonitorPresence(info.Id, info.Properties, isPresentFallback: null);
         }
 
         private static void OnClassicMonitorUpdated(DeviceWatcher sender, DeviceInformationUpdate update)
@@ -444,20 +451,10 @@ namespace WindowsShutdownHelper.Functions
 
             bool hasPresence = false;
             bool isPresent = false;
-            if (properties != null &&
-                properties.TryGetValue("System.Devices.Aep.IsPresent", out object presentObj) &&
-                presentObj != null)
+            if (TryGetBoolProperty(properties, "System.Devices.Aep.IsPresent", out bool parsedPresence))
             {
-                if (presentObj is bool boolValue)
-                {
-                    isPresent = boolValue;
-                    hasPresence = true;
-                }
-                else if (bool.TryParse(presentObj.ToString(), out bool parsed))
-                {
-                    isPresent = parsed;
-                    hasPresence = true;
-                }
+                isPresent = parsedPresence;
+                hasPresence = true;
             }
 
             if (!hasPresence)
@@ -502,6 +499,8 @@ namespace WindowsShutdownHelper.Functions
                 {
                     _monitorLastSeen[address] = now;
                 }
+
+                ScheduleClassicPresenceRefresh(force: false);
             }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         }
 
@@ -521,6 +520,139 @@ namespace WindowsShutdownHelper.Functions
             }
 
             _classicMonitorHeartbeatTimer = null;
+        }
+
+        private static void ScheduleClassicPresenceRefresh(bool force)
+        {
+            if (!_isMonitoring || _classicMonitorWatcher == null)
+            {
+                return;
+            }
+
+            long nowTick = Environment.TickCount64;
+            long lastTick = Interlocked.Read(ref _lastClassicPresenceRefreshTick);
+            if (!force && nowTick - lastTick < ClassicPresenceRefreshIntervalMs)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _classicPresenceRefreshInProgress, 1, 0) != 0)
+            {
+                return;
+            }
+
+            Interlocked.Exchange(ref _lastClassicPresenceRefreshTick, nowTick);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await RefreshClassicPresenceSnapshotAsync();
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _classicPresenceRefreshInProgress, 0);
+                }
+            });
+        }
+
+        private static async Task RefreshClassicPresenceSnapshotAsync()
+        {
+            try
+            {
+                string selector = "System.Devices.Aep.ProtocolId:=\"" + ClassicBtProtocolId + "\"";
+                var requestedProps = new string[]
+                {
+                    "System.Devices.Aep.DeviceAddress",
+                    "System.Devices.Aep.IsPresent"
+                };
+
+                DeviceInformationCollection devices = await DeviceInformation.FindAllAsync(
+                    selector,
+                    requestedProps,
+                    DeviceInformationKind.AssociationEndpoint);
+
+                if (!_isMonitoring)
+                {
+                    return;
+                }
+
+                DateTime now = DateTime.Now;
+                var presentAddresses = new HashSet<ulong>();
+
+                foreach (DeviceInformation device in devices)
+                {
+                    if (!TryGetAddressFromProperties(device.Properties, out ulong address))
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(device.Id))
+                    {
+                        _classicMonitorIdToAddress[device.Id] = address;
+                    }
+
+                    if (TryGetBoolProperty(device.Properties, "System.Devices.Aep.IsPresent", out bool isPresent) &&
+                        isPresent)
+                    {
+                        presentAddresses.Add(address);
+                        _classicMonitorPresent[address] = 1;
+                        _monitorLastSeen[address] = now;
+                    }
+                }
+
+                foreach (ulong address in _classicMonitorPresent.Keys)
+                {
+                    if (!presentAddresses.Contains(address))
+                    {
+                        _classicMonitorPresent.TryRemove(address, out _);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static bool TryGetAddressFromProperties(
+            IReadOnlyDictionary<string, object> properties,
+            out ulong address)
+        {
+            address = 0;
+            if (properties == null ||
+                !properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object addrObj))
+            {
+                return false;
+            }
+
+            address = MacStringToUlong(addrObj?.ToString() ?? string.Empty);
+            return address != 0;
+        }
+
+        private static bool TryGetBoolProperty(
+            IReadOnlyDictionary<string, object> properties,
+            string key,
+            out bool value)
+        {
+            value = false;
+            if (properties == null ||
+                string.IsNullOrWhiteSpace(key) ||
+                !properties.TryGetValue(key, out object rawValue) ||
+                rawValue == null)
+            {
+                return false;
+            }
+
+            if (rawValue is bool boolValue)
+            {
+                value = boolValue;
+                return true;
+            }
+
+            return bool.TryParse(rawValue.ToString(), out value);
         }
 
         // ---------- Helpers ----------
