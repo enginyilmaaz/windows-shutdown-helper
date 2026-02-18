@@ -83,6 +83,11 @@ window.SettingsPage = {
                 '<input type="number" id="set-bt-threshold" class="form-input" style="max-width:80px;text-align:center" min="1" max="60" value="' + (s.bluetoothThresholdSeconds || 5) + '">' +
             '</div>' +
 
+            '<div class="settings-row">' +
+                '<span class="settings-label">' + (L('SettingsFormLabelBluetoothRssiThreshold') || 'Bluetooth signal threshold (dBm)') + '</span>' +
+                '<input type="number" id="set-bt-rssi" class="form-input" style="max-width:80px;text-align:center" min="-100" max="0" value="' + (s.bluetoothRssiThreshold || 0) + '">' +
+            '</div>' +
+
             '<div class="settings-actions">' +
                 '<button class="btn btn-secondary" id="set-import-conf">' + (L('SettingsFormButtonImportConfig') || 'Import (.conf)') + '</button>' +
                 '<button class="btn btn-secondary" id="set-export-conf">' + (L('SettingsFormButtonExportConfig') || 'Export (.conf)') + '</button>' +
@@ -120,6 +125,8 @@ window.SettingsPage = {
             if (el) el.value = s.countdownNotifierSeconds || 5;
             el = document.getElementById('set-bt-threshold');
             if (el) el.value = s.bluetoothThresholdSeconds || 5;
+            el = document.getElementById('set-bt-rssi');
+            if (el) el.value = s.bluetoothRssiThreshold || 0;
         });
         self._registerCleanup(offSettingsLoaded);
 
@@ -159,6 +166,7 @@ window.SettingsPage = {
                 isCountdownNotifierEnabled: document.getElementById('set-countdown').checked,
                 countdownNotifierSeconds: parseInt(document.getElementById('set-seconds').value) || 5,
                 bluetoothThresholdSeconds: parseInt(document.getElementById('set-bt-threshold').value) || 5,
+                bluetoothRssiThreshold: parseInt(document.getElementById('set-bt-rssi').value) || 0,
                 language: document.getElementById('set-lang').value,
                 theme: document.getElementById('set-theme').value
             });

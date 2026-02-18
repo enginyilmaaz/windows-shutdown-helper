@@ -192,6 +192,7 @@ namespace WindowsAutoPowerManager.Lang
                 BluetoothNotAvailable = "Bluetooth недоступен",
                 BluetoothDeviceLabel = "Устройство",
                 SettingsFormLabelBluetoothThreshold = "Порог Bluetooth (сек)",
+                SettingsFormLabelBluetoothRssiThreshold = "Порог сигнала Bluetooth (дБм)",
 
             };
             return lang;

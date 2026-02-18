@@ -192,6 +192,7 @@ namespace WindowsAutoPowerManager.Lang
                 BluetoothNotAvailable = "Bluetooth nicht verfügbar",
                 BluetoothDeviceLabel = "Gerät",
                 SettingsFormLabelBluetoothThreshold = "Bluetooth-Schwelle (Sek.)",
+                SettingsFormLabelBluetoothRssiThreshold = "Bluetooth-Signalschwelle (dBm)",
 
             };
             return lang;

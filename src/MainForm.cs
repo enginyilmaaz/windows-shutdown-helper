@@ -1580,7 +1580,8 @@ namespace WindowsAutoPowerManager
                 }
 
                 int threshold = (_cachedSettings?.BluetoothThresholdSeconds > 0) ? _cachedSettings.BluetoothThresholdSeconds : 5;
-                bool reachable = BluetoothScanner.IsDeviceReachable(state.BluetoothAddress, threshold, now);
+                int rssiMin = (_cachedSettings?.BluetoothRssiThreshold < 0) ? _cachedSettings.BluetoothRssiThreshold : 0;
+                bool reachable = BluetoothScanner.IsDeviceReachable(state.BluetoothAddress, threshold, rssiMin, now);
                 bool hasEverBeenSeen = BluetoothScanner.HasDeviceEverBeenSeen(state.BluetoothAddress);
                 bool wasReachable = _bluetoothReachabilityByActionKey.TryGetValue(actionKey, out bool previousReachable)
                     && previousReachable;

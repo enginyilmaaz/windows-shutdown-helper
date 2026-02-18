@@ -29,6 +29,7 @@ namespace WindowsAutoPowerManager.Functions
         private static readonly ConcurrentDictionary<ulong, BleDeviceInfo> _discoveredDevices = new();
         private static readonly ConcurrentDictionary<ulong, int> _namelessBleAdvertisementCounts = new();
         private static readonly ConcurrentDictionary<ulong, DateTime> _monitorLastSeen = new();
+        private static readonly ConcurrentDictionary<ulong, short> _monitorLastRssi = new();
         private static readonly ConcurrentDictionary<string, ulong> _classicDiscoveryIdToAddress = new();
         private static readonly ConcurrentDictionary<string, ulong> _classicMonitorIdToAddress = new();
         private static readonly ConcurrentDictionary<ulong, byte> _classicMonitorPresent = new();
@@ -422,6 +423,7 @@ namespace WindowsAutoPowerManager.Functions
                 StopClassicMonitorHeartbeatLocked();
 
                 _monitorLastSeen.Clear();
+                _monitorLastRssi.Clear();
                 _classicMonitorIdToAddress.Clear();
                 _classicMonitorPresent.Clear();
                 Interlocked.Exchange(ref _classicPresenceRefreshInProgress, 0);
@@ -462,6 +464,36 @@ namespace WindowsAutoPowerManager.Functions
             return bluetoothAddress != 0 && _monitorLastSeen.ContainsKey(bluetoothAddress);
         }
 
+        public static short GetDeviceRssi(ulong bluetoothAddress)
+        {
+            if (bluetoothAddress == 0) return 0;
+            return _monitorLastRssi.TryGetValue(bluetoothAddress, out short rssi) ? rssi : (short)0;
+        }
+
+        public static bool IsDeviceReachable(ulong bluetoothAddress, int thresholdSeconds, int rssiMinDbm, DateTime now)
+        {
+            if (bluetoothAddress == 0) return false;
+            if (!_monitorLastSeen.TryGetValue(bluetoothAddress, out DateTime lastSeen))
+            {
+                return false;
+            }
+
+            if ((now - lastSeen).TotalSeconds >= thresholdSeconds)
+            {
+                return false;
+            }
+
+            if (rssiMinDbm < 0 &&
+                _monitorLastRssi.TryGetValue(bluetoothAddress, out short rssi) &&
+                rssi < 0 &&
+                rssi < rssiMinDbm)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public static void SeedMonitoredDeviceFromDiscovery(string macAddress, int maxDiscoveryAgeSeconds = 15)
         {
             ulong address = MacStringToUlong(macAddress);
@@ -486,6 +518,7 @@ namespace WindowsAutoPowerManager.Functions
             BluetoothLEAdvertisementReceivedEventArgs args)
         {
             _monitorLastSeen[args.BluetoothAddress] = DateTime.Now;
+            _monitorLastRssi[args.BluetoothAddress] = args.RawSignalStrengthInDBm;
         }
 
         private static void StartClassicMonitoringLocked()
@@ -501,7 +534,8 @@ namespace WindowsAutoPowerManager.Functions
                 var requestedProps = new string[]
                 {
                     "System.Devices.Aep.DeviceAddress",
-                    "System.Devices.Aep.IsPresent"
+                    "System.Devices.Aep.IsPresent",
+                    "System.Devices.Aep.SignalStrength"
                 };
 
                 _classicMonitorWatcher = DeviceInformation.CreateWatcher(
@@ -614,6 +648,20 @@ namespace WindowsAutoPowerManager.Functions
             {
                 _classicMonitorPresent[address] = 1;
                 _monitorLastSeen[address] = DateTime.Now;
+
+                if (properties != null &&
+                    properties.TryGetValue("System.Devices.Aep.SignalStrength", out object sigObj) &&
+                    sigObj != null)
+                {
+                    if (sigObj is int intRssi)
+                    {
+                        _monitorLastRssi[address] = (short)intRssi;
+                    }
+                    else if (int.TryParse(sigObj.ToString(), out int parsedRssi))
+                    {
+                        _monitorLastRssi[address] = (short)parsedRssi;
+                    }
+                }
             }
             else
             {
@@ -717,7 +765,8 @@ namespace WindowsAutoPowerManager.Functions
                 var requestedProps = new string[]
                 {
                     "System.Devices.Aep.DeviceAddress",
-                    "System.Devices.Aep.IsPresent"
+                    "System.Devices.Aep.IsPresent",
+                    "System.Devices.Aep.SignalStrength"
                 };
 
                 DeviceInformationCollection devices = await DeviceInformation.FindAllAsync(
@@ -751,6 +800,19 @@ namespace WindowsAutoPowerManager.Functions
                         presentAddresses.Add(address);
                         _classicMonitorPresent[address] = 1;
                         _monitorLastSeen[address] = now;
+
+                        if (device.Properties.TryGetValue("System.Devices.Aep.SignalStrength", out object sigObj) &&
+                            sigObj != null)
+                        {
+                            if (sigObj is int intRssi)
+                            {
+                                _monitorLastRssi[address] = (short)intRssi;
+                            }
+                            else if (int.TryParse(sigObj.ToString(), out int parsedRssi))
+                            {
+                                _monitorLastRssi[address] = (short)parsedRssi;
+                            }
+                        }
                     }
                 }
 

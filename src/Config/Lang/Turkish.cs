@@ -193,6 +193,7 @@ namespace WindowsAutoPowerManager.Lang
                 BluetoothNotAvailable = "Bluetooth kullanılamıyor",
                 BluetoothDeviceLabel = "Cihaz",
                 SettingsFormLabelBluetoothThreshold = "Bluetooth eşik süresi (sn)",
+                SettingsFormLabelBluetoothRssiThreshold = "Bluetooth sinyal eşiği (dBm)",
 
             };
 

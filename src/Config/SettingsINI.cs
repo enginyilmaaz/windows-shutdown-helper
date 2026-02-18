@@ -13,7 +13,8 @@
                 CountdownNotifierSeconds = 5,
                 Language = "auto",
                 Theme = "system",
-                BluetoothThresholdSeconds = 5
+                BluetoothThresholdSeconds = 5,
+                BluetoothRssiThreshold = 0
             };
 
 
