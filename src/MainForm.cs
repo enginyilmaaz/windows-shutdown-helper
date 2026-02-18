@@ -184,7 +184,6 @@ namespace WindowsAutoPowerManager
                 // Apply modern tray menu renderer based on theme
                 _cachedSettings = LoadSettings();
                 Logger.Initialize(_cachedSettings);
-                ApplySettingsOnStartup(_cachedSettings);
                 bool isDark = DetermineIfDark(_cachedSettings.Theme);
                 ContextMenuStripNotifyIcon.Renderer = new WindowsAutoPowerManager.Functions.ModernMenuRenderer(isDark);
                 ContextMenuStripNotifyIcon.Font = new System.Drawing.Font("Segoe UI", 9.5f, System.Drawing.FontStyle.Regular);
@@ -433,28 +432,6 @@ namespace WindowsAutoPowerManager
         private Settings LoadSettings()
         {
             return SettingsStorage.LoadOrDefault();
-        }
-
-        private void ApplySettingsOnStartup(Settings settingsObj)
-        {
-            if (settingsObj == null) return;
-
-            try
-            {
-                string startupName = Language.SettingsFormAddStartupAppName ?? Constants.AppName;
-                if (settingsObj.StartWithWindows)
-                {
-                    StartWithWindows.AddStartup(startupName);
-                }
-                else
-                {
-                    StartWithWindows.DeleteStartup(startupName);
-                }
-            }
-            catch
-            {
-                // Keep startup resilient if registry access fails.
-            }
         }
 
         public void UpdateCachedSettings(Settings settings)
@@ -902,6 +879,7 @@ namespace WindowsAutoPowerManager
             };
 
             string currentLang = _cachedSettings?.Language ?? "auto";
+            bool previousStartWithWindows = _cachedSettings?.StartWithWindows ?? false;
             SettingsStorage.Save(newSettings);
             _cachedSettings = newSettings;
             Logger.UpdateSettings(newSettings);
@@ -913,10 +891,13 @@ namespace WindowsAutoPowerManager
                 ? System.Drawing.Color.FromArgb(26, 27, 46)
                 : System.Drawing.Color.FromArgb(240, 242, 245);
 
-            if (newSettings.StartWithWindows)
-                StartWithWindows.AddStartup(Language.SettingsFormAddStartupAppName ?? Constants.AppName);
-            else
-                StartWithWindows.DeleteStartup(Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+            if (newSettings.StartWithWindows != previousStartWithWindows)
+            {
+                if (newSettings.StartWithWindows)
+                    StartWithWindows.AddStartup(Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+                else
+                    StartWithWindows.DeleteStartup(Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+            }
 
             if (newSettings.IsCountdownNotifierEnabled)
             {

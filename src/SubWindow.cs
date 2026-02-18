@@ -624,15 +624,20 @@ namespace WindowsAutoPowerManager
             };
 
             var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
-            string currentLang = main?.GetCachedSettingsOrDefault()?.Language ?? LoadSettings().Language;
+            var previousSettings = main?.GetCachedSettingsOrDefault() ?? LoadSettings();
+            string currentLang = previousSettings.Language;
+            bool previousStartWithWindows = previousSettings.StartWithWindows;
             SettingsStorage.Save(newSettings);
             Logger.UpdateSettings(newSettings);
             main?.UpdateCachedSettings(newSettings);
 
-            if (newSettings.StartWithWindows)
-                StartWithWindows.AddStartup(MainForm.Language.SettingsFormAddStartupAppName ?? Constants.AppName);
-            else
-                StartWithWindows.DeleteStartup(MainForm.Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+            if (newSettings.StartWithWindows != previousStartWithWindows)
+            {
+                if (newSettings.StartWithWindows)
+                    StartWithWindows.AddStartup(MainForm.Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+                else
+                    StartWithWindows.DeleteStartup(MainForm.Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+            }
 
             if (newSettings.IsCountdownNotifierEnabled)
             {

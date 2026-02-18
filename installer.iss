@@ -82,7 +82,6 @@ italian.RemoveDataOnUninstall=Eliminare anche i dati utente (impostazioni, attiv
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startupentry"; Description: "{cm:StartWithWindows}"; GroupDescription: "{cm:OtherOptions}"; Flags: unchecked
 
 [Files]
 #ifexist "bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\Windows Auto Power Manager.exe"
@@ -110,9 +109,6 @@ Source: "bin\Release\net8.0-windows\Windows Auto Power Manager.runtimeconfig.jso
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-
-[Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" -runInTaskBar"; Flags: uninsdeletevalue; Tasks: startupentry
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
