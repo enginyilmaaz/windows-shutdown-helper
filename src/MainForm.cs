@@ -817,6 +817,9 @@ namespace WindowsAutoPowerManager
 
                     parsedAction.Value = btMac;
                     parsedAction.ValueUnit = btName ?? "";
+
+                    // Prime monitor state when the selected device was just discovered in UI scan.
+                    BluetoothScanner.SeedMonitoredDeviceFromDiscovery(btMac);
                 }
                 else
                 {

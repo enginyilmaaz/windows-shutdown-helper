@@ -31,6 +31,7 @@ namespace WindowsAutoPowerManager.Functions
         private static readonly ConcurrentDictionary<string, ulong> _classicMonitorIdToAddress = new();
         private static readonly ConcurrentDictionary<ulong, byte> _classicMonitorPresent = new();
         private static int _classicPresenceRefreshInProgress;
+        private static int _classicPresenceRefreshFailureCount;
         private static long _lastClassicPresenceRefreshTick = -ClassicPresenceRefreshIntervalMs;
 
         private static readonly object _discoveryLock = new();
@@ -45,6 +46,7 @@ namespace WindowsAutoPowerManager.Functions
         // Bluetooth Classic protocol ID for DeviceWatcher
         private const string ClassicBtProtocolId = "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}";
         private const int ClassicPresenceRefreshIntervalMs = 5000;
+        private const int ClassicPresenceRefreshFailureTolerance = 3;
 
         // ---------- Discovery Scan (UI device list) ----------
 
@@ -279,6 +281,7 @@ namespace WindowsAutoPowerManager.Functions
 
                 StartClassicMonitoringLocked();
                 _isMonitoring = true;
+                Interlocked.Exchange(ref _classicPresenceRefreshFailureCount, 0);
                 StartClassicMonitorHeartbeatLocked();
                 ScheduleClassicPresenceRefresh(force: true);
             }
@@ -304,6 +307,7 @@ namespace WindowsAutoPowerManager.Functions
                 _classicMonitorIdToAddress.Clear();
                 _classicMonitorPresent.Clear();
                 Interlocked.Exchange(ref _classicPresenceRefreshInProgress, 0);
+                Interlocked.Exchange(ref _classicPresenceRefreshFailureCount, 0);
                 Interlocked.Exchange(ref _lastClassicPresenceRefreshTick, -ClassicPresenceRefreshIntervalMs);
                 _isMonitoring = false;
             }
@@ -338,6 +342,25 @@ namespace WindowsAutoPowerManager.Functions
         public static bool HasDeviceEverBeenSeen(ulong bluetoothAddress)
         {
             return bluetoothAddress != 0 && _monitorLastSeen.ContainsKey(bluetoothAddress);
+        }
+
+        public static void SeedMonitoredDeviceFromDiscovery(string macAddress, int maxDiscoveryAgeSeconds = 15)
+        {
+            ulong address = MacStringToUlong(macAddress);
+            if (address == 0) return;
+            if (maxDiscoveryAgeSeconds <= 0) maxDiscoveryAgeSeconds = 15;
+
+            if (!_discoveredDevices.TryGetValue(address, out BleDeviceInfo discovered) || discovered == null)
+            {
+                return;
+            }
+
+            if ((DateTime.Now - discovered.LastSeen).TotalSeconds > maxDiscoveryAgeSeconds)
+            {
+                return;
+            }
+
+            _monitorLastSeen[address] = DateTime.Now;
         }
 
         private static void OnMonitorReceived(
@@ -547,10 +570,19 @@ namespace WindowsAutoPowerManager.Functions
             {
                 try
                 {
-                    await RefreshClassicPresenceSnapshotAsync();
-                }
-                catch
-                {
+                    bool refreshed = await RefreshClassicPresenceSnapshotAsync();
+                    if (refreshed)
+                    {
+                        Interlocked.Exchange(ref _classicPresenceRefreshFailureCount, 0);
+                    }
+                    else
+                    {
+                        int failures = Interlocked.Increment(ref _classicPresenceRefreshFailureCount);
+                        if (failures >= ClassicPresenceRefreshFailureTolerance)
+                        {
+                            _classicMonitorPresent.Clear();
+                        }
+                    }
                 }
                 finally
                 {
@@ -559,7 +591,7 @@ namespace WindowsAutoPowerManager.Functions
             });
         }
 
-        private static async Task RefreshClassicPresenceSnapshotAsync()
+        private static async Task<bool> RefreshClassicPresenceSnapshotAsync()
         {
             try
             {
@@ -577,7 +609,7 @@ namespace WindowsAutoPowerManager.Functions
 
                 if (!_isMonitoring)
                 {
-                    return;
+                    return false;
                 }
 
                 DateTime now = DateTime.Now;
@@ -611,9 +643,12 @@ namespace WindowsAutoPowerManager.Functions
                         _classicMonitorPresent.TryRemove(address, out _);
                     }
                 }
+
+                return true;
             }
             catch
             {
+                return false;
             }
         }
 
