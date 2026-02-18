@@ -22,6 +22,7 @@ namespace WindowsAutoPowerManager
         private Label _loadingLabel;
         private Timer _loadingDelayTimer;
         private const int LoadingOverlayDelayMs = 350;
+        private const string ConfigFileDialogFilter = "Configuration Files (*.conf)|*.conf|All Files (*.*)|*.*";
 
         public SubWindow(string pageName, string title)
         {
@@ -281,6 +282,18 @@ namespace WindowsAutoPowerManager
             PostMessage("refreshActions", GetTranslatedActions());
         }
 
+        public void BroadcastSettings(Settings settings)
+        {
+            if (!_webViewReady) return;
+            PostMessage("settingsLoaded", BuildSettingsPayload(settings));
+        }
+
+        public void BroadcastLogs(object logs)
+        {
+            if (!_webViewReady) return;
+            PostMessage("logsLoaded", logs);
+        }
+
         // =============== WebMessage Handler ===============
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -336,6 +349,12 @@ namespace WindowsAutoPowerManager
                     break;
                 case "clearLogs":
                     HandleClearLogs();
+                    break;
+                case "exportSettingsConfig":
+                    HandleExportSettingsConfig();
+                    break;
+                case "importSettingsConfig":
+                    HandleImportSettingsConfig();
                     break;
                 case "getLanguageList":
                     HandleGetLanguageList();
@@ -714,6 +733,109 @@ namespace WindowsAutoPowerManager
             }
 
             PostMessage("languageList", list);
+        }
+
+        private void HandleExportSettingsConfig()
+        {
+            var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+            if (main == null)
+            {
+                PostMessage("showToast", new
+                {
+                    title = MainForm.Language.MessageTitleError,
+                    message = "Main window is not available.",
+                    type = "error",
+                    duration = 3000
+                });
+                return;
+            }
+
+            using var dialog = new SaveFileDialog
+            {
+                Title = "Export Configuration",
+                Filter = ConfigFileDialogFilter,
+                DefaultExt = "conf",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = AppDataTransfer.BuildDefaultFileName(),
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (!main.ExportDataToFile(dialog.FileName, out string errorMessage))
+            {
+                PostMessage("showToast", new
+                {
+                    title = MainForm.Language.MessageTitleError,
+                    message = "Export failed: " + errorMessage,
+                    type = "error",
+                    duration = 3500
+                });
+                return;
+            }
+
+            PostMessage("showToast", new
+            {
+                title = MainForm.Language.MessageTitleSuccess,
+                message = "Configuration exported successfully.",
+                type = "success",
+                duration = 2200
+            });
+        }
+
+        private void HandleImportSettingsConfig()
+        {
+            var main = Application.OpenForms.OfType<MainForm>().FirstOrDefault();
+            if (main == null)
+            {
+                PostMessage("showToast", new
+                {
+                    title = MainForm.Language.MessageTitleError,
+                    message = "Main window is not available.",
+                    type = "error",
+                    duration = 3000
+                });
+                return;
+            }
+
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Import Configuration",
+                Filter = ConfigFileDialogFilter,
+                DefaultExt = "conf",
+                CheckFileExists = true,
+                Multiselect = false,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (!main.ImportDataFromFile(dialog.FileName, out string errorMessage))
+            {
+                PostMessage("showToast", new
+                {
+                    title = MainForm.Language.MessageTitleError,
+                    message = "Import failed: " + errorMessage,
+                    type = "error",
+                    duration = 3500
+                });
+                return;
+            }
+
+            PostMessage("showToast", new
+            {
+                title = MainForm.Language.MessageTitleSuccess,
+                message = "Configuration imported successfully.",
+                type = "success",
+                duration = 2200
+            });
         }
 
         // =============== Helpers ===============

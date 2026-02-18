@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 
@@ -113,6 +114,28 @@ namespace WindowsAutoPowerManager.Functions
             {
                 // Ignore clear errors to keep UI responsive.
             }
+        }
+
+        public static void ReplaceLogs(IEnumerable<LogSystem> logs)
+        {
+            EnsureInitialized(null);
+
+            lock (SyncRoot)
+            {
+                _logCache = logs?
+                    .Where(log => log != null)
+                    .Select(log => new LogSystem
+                    {
+                        ActionType = log.ActionType,
+                        ActionExecutedDate = log.ActionExecutedDate
+                    })
+                    .ToList() ?? new List<LogSystem>();
+
+                TrimToLimitLocked();
+                _flushTimer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            }
+
+            Flush();
         }
 
         public static void Flush()

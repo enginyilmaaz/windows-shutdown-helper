@@ -28,6 +28,7 @@ namespace WindowsAutoPowerManager.Functions
 
         private static readonly ConcurrentDictionary<ulong, BleDeviceInfo> _discoveredDevices = new();
         private static readonly ConcurrentDictionary<ulong, DateTime> _monitorLastSeen = new();
+        private static readonly ConcurrentDictionary<string, ulong> _classicDiscoveryIdToAddress = new();
         private static readonly ConcurrentDictionary<string, ulong> _classicMonitorIdToAddress = new();
         private static readonly ConcurrentDictionary<ulong, byte> _classicMonitorPresent = new();
         private static int _classicPresenceRefreshInProgress;
@@ -57,6 +58,7 @@ namespace WindowsAutoPowerManager.Functions
                 if (_isDiscovering) return;
 
                 _discoveredDevices.Clear();
+                _classicDiscoveryIdToAddress.Clear();
                 Interlocked.Increment(ref _discoveryVersion);
 
                 // BLE advertisement watcher
@@ -72,7 +74,11 @@ namespace WindowsAutoPowerManager.Functions
                 try
                 {
                     string selector = "System.Devices.Aep.ProtocolId:=\"" + ClassicBtProtocolId + "\"";
-                    var requestedProps = new string[] { "System.Devices.Aep.DeviceAddress" };
+                    var requestedProps = new string[]
+                    {
+                        "System.Devices.Aep.DeviceAddress",
+                        "System.ItemNameDisplay"
+                    };
                     _classicBtWatcher = DeviceInformation.CreateWatcher(
                         selector, requestedProps, DeviceInformationKind.AssociationEndpoint);
 
@@ -115,6 +121,7 @@ namespace WindowsAutoPowerManager.Functions
                     _classicBtWatcher = null;
                 }
 
+                _classicDiscoveryIdToAddress.Clear();
                 _isDiscovering = false;
                 Interlocked.Increment(ref _discoveryVersion);
             }
@@ -199,35 +206,51 @@ namespace WindowsAutoPowerManager.Functions
 
         private static void OnClassicDeviceAdded(DeviceWatcher sender, DeviceInformation info)
         {
-            AddClassicDevice(info);
+            AddOrUpdateClassicDevice(info?.Id, info?.Name, info?.Properties);
         }
 
         private static void OnClassicDeviceUpdated(DeviceWatcher sender, DeviceInformationUpdate update)
         {
-            // Update is mainly for connection state changes, ignore for discovery
+            AddOrUpdateClassicDevice(update?.Id, null, update?.Properties);
         }
 
-        private static void AddClassicDevice(DeviceInformation info)
+        private static void AddOrUpdateClassicDevice(
+            string deviceId,
+            string name,
+            IReadOnlyDictionary<string, object> properties)
         {
-            string name = info.Name;
-            if (string.IsNullOrEmpty(name)) return;
-
-            string deviceAddress = "";
-            if (info.Properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object addr))
+            string deviceAddress = string.Empty;
+            if (properties != null &&
+                properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object addr))
             {
-                deviceAddress = addr?.ToString() ?? "";
+                deviceAddress = addr?.ToString() ?? string.Empty;
             }
 
-            if (string.IsNullOrEmpty(deviceAddress)) return;
-
             ulong macLong = MacStringToUlong(deviceAddress);
+            if (macLong == 0 &&
+                !string.IsNullOrWhiteSpace(deviceId) &&
+                _classicDiscoveryIdToAddress.TryGetValue(deviceId, out ulong knownAddress))
+            {
+                macLong = knownAddress;
+            }
+
             if (macLong == 0) return;
 
+            if (!string.IsNullOrWhiteSpace(deviceId))
+            {
+                _classicDiscoveryIdToAddress[deviceId] = macLong;
+            }
+
+            string displayName = ResolveClassicDeviceName(
+                name,
+                properties,
+                macLong,
+                out bool usedAddressFallback);
             var deviceInfo = new BleDeviceInfo
             {
                 BluetoothAddress = macLong,
                 MacAddress = FormatMacAddress(macLong),
-                LocalName = name,
+                LocalName = displayName,
                 RssiDbm = 0,
                 LastSeen = DateTime.Now
             };
@@ -242,14 +265,15 @@ namespace WindowsAutoPowerManager.Functions
                 },
                 (key, existing) =>
                 {
-                    if (!string.IsNullOrEmpty(name))
+                    bool canUpdateName = !usedAddressFallback || string.IsNullOrWhiteSpace(existing.LocalName);
+                    if (!string.IsNullOrEmpty(displayName) && canUpdateName)
                     {
-                        if (!string.Equals(existing.LocalName, name, StringComparison.Ordinal))
+                        if (!string.Equals(existing.LocalName, displayName, StringComparison.Ordinal))
                         {
                             changed = true;
                         }
 
-                        existing.LocalName = name;
+                        existing.LocalName = displayName;
                     }
                     existing.LastSeen = DateTime.Now;
                     return existing;
@@ -261,6 +285,33 @@ namespace WindowsAutoPowerManager.Functions
             }
 
             DeviceDiscovered?.Invoke(deviceInfo);
+        }
+
+        private static string ResolveClassicDeviceName(
+            string name,
+            IReadOnlyDictionary<string, object> properties,
+            ulong bluetoothAddress,
+            out bool usedAddressFallback)
+        {
+            usedAddressFallback = false;
+
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            if (properties != null &&
+                properties.TryGetValue("System.ItemNameDisplay", out object displayName))
+            {
+                string resolved = displayName?.ToString() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(resolved))
+                {
+                    return resolved;
+                }
+            }
+
+            usedAddressFallback = true;
+            return FormatMacAddress(bluetoothAddress);
         }
 
         // ---------- Background Monitoring ----------

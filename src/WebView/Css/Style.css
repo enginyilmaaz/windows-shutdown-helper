@@ -1183,6 +1183,7 @@ body.subwindow-host .card {
 
 .settings-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     justify-content: flex-end;
     margin-top: 16px;

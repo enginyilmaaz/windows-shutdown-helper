@@ -84,6 +84,8 @@ window.SettingsPage = {
             '</div>' +
 
             '<div class="settings-actions">' +
+                '<button class="btn btn-secondary" id="set-import-conf">Import (.conf)</button>' +
+                '<button class="btn btn-secondary" id="set-export-conf">Export (.conf)</button>' +
                 '<button class="btn btn-secondary" id="set-cancel">' + (L('SettingsFormButtonCancel') || 'Cancel') + '</button>' +
                 '<button class="btn btn-success" id="set-save">' + (L('SettingsFormButtonSave') || 'Save') + '</button>' +
             '</div>' +
@@ -164,6 +166,24 @@ window.SettingsPage = {
         saveEl.addEventListener('click', onSaveClick);
         self._registerCleanup(function () {
             saveEl.removeEventListener('click', onSaveClick);
+        });
+
+        var importEl = document.getElementById('set-import-conf');
+        var onImportClick = function () {
+            Bridge.send('importSettingsConfig', {});
+        };
+        importEl.addEventListener('click', onImportClick);
+        self._registerCleanup(function () {
+            importEl.removeEventListener('click', onImportClick);
+        });
+
+        var exportEl = document.getElementById('set-export-conf');
+        var onExportClick = function () {
+            Bridge.send('exportSettingsConfig', {});
+        };
+        exportEl.addEventListener('click', onExportClick);
+        self._registerCleanup(function () {
+            exportEl.removeEventListener('click', onExportClick);
         });
 
         var cancelEl = document.getElementById('set-cancel');

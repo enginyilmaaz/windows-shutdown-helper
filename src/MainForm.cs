@@ -46,6 +46,7 @@ namespace WindowsAutoPowerManager
         private readonly Dictionary<string, ActionRuntimeState> _actionRuntimeStates =
             new Dictionary<string, ActionRuntimeState>();
         private int _lastBluetoothDiscoveryVersion = -1;
+        private const string ConfigFileDialogFilter = "Configuration Files (*.conf)|*.conf|All Files (*.*)|*.*";
 
         [Flags]
         private enum ActionExecutionResult
@@ -609,6 +610,12 @@ namespace WindowsAutoPowerManager
                 case "stopBluetoothScan":
                     HandleStopBluetoothScan();
                     break;
+                case "exportSettingsConfig":
+                    HandleExportSettingsConfig();
+                    break;
+                case "importSettingsConfig":
+                    HandleImportSettingsConfig();
+                    break;
                 case "exitApp":
                     IsApplicationExiting = true;
                     StopSubWindowPrewarm();
@@ -1012,6 +1019,217 @@ namespace WindowsAutoPowerManager
             }
 
             PostMessage("languageList", list);
+        }
+
+        private void HandleExportSettingsConfig()
+        {
+            using var dialog = new SaveFileDialog
+            {
+                Title = "Export Configuration",
+                Filter = ConfigFileDialogFilter,
+                DefaultExt = "conf",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = AppDataTransfer.BuildDefaultFileName(),
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (!ExportDataToFile(dialog.FileName, out string errorMessage))
+            {
+                PostMessage("showToast", new
+                {
+                    title = Language.MessageTitleError,
+                    message = "Export failed: " + errorMessage,
+                    type = "error",
+                    duration = 3500
+                });
+                return;
+            }
+
+            PostMessage("showToast", new
+            {
+                title = Language.MessageTitleSuccess,
+                message = "Configuration exported successfully.",
+                type = "success",
+                duration = 2200
+            });
+        }
+
+        private void HandleImportSettingsConfig()
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Import Configuration",
+                Filter = ConfigFileDialogFilter,
+                DefaultExt = "conf",
+                CheckFileExists = true,
+                Multiselect = false,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (!ImportDataFromFile(dialog.FileName, out string errorMessage))
+            {
+                PostMessage("showToast", new
+                {
+                    title = Language.MessageTitleError,
+                    message = "Import failed: " + errorMessage,
+                    type = "error",
+                    duration = 3500
+                });
+                return;
+            }
+
+            PostMessage("showToast", new
+            {
+                title = Language.MessageTitleSuccess,
+                message = "Configuration imported successfully.",
+                type = "success",
+                duration = 2200
+            });
+        }
+
+        public bool ExportDataToFile(string filePath, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+            try
+            {
+                Settings settingsSnapshot = _cachedSettings ?? LoadSettings();
+                List<ActionModel> actionsSnapshot = ActionList
+                    .Where(action => action != null)
+                    .ToList();
+                List<LogSystem> logsSnapshot = Logger.GetRecentLogs(5000);
+                logsSnapshot.Reverse();
+
+                AppDataTransfer.ExportToFile(
+                    filePath,
+                    settingsSnapshot,
+                    actionsSnapshot,
+                    logsSnapshot);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                return false;
+            }
+        }
+
+        public bool ImportDataFromFile(string filePath, out string errorMessage)
+        {
+            if (!AppDataTransfer.TryImportFromFile(
+                    filePath,
+                    out Settings importedSettings,
+                    out List<ActionModel> importedActions,
+                    out List<LogSystem> importedLogs,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            try
+            {
+                ApplyImportedSettings(importedSettings);
+
+                ActionList = (importedActions ?? new List<ActionModel>())
+                    .Where(action => action != null)
+                    .ToList();
+                WriteJsonToActionList();
+
+                Logger.ReplaceLogs(importedLogs ?? new List<LogSystem>());
+                HandleLoadSettings();
+                HandleLoadLogs();
+                BroadcastSubWindowSettings();
+                BroadcastSubWindowLogs();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                return false;
+            }
+        }
+
+        private void ApplyImportedSettings(Settings importedSettings)
+        {
+            var resolved = importedSettings ?? Config.SettingsINI.DefaulSettingFile();
+
+            string currentLang = _cachedSettings?.Language ?? "auto";
+            bool previousStartWithWindows = _cachedSettings?.StartWithWindows ?? false;
+
+            SettingsStorage.Save(resolved);
+            resolved = SettingsStorage.LoadOrDefault();
+            _cachedSettings = resolved;
+            Logger.UpdateSettings(resolved);
+
+            bool isDark = DetermineIfDark(resolved.Theme);
+            ContextMenuStripNotifyIcon.Renderer = new WindowsAutoPowerManager.Functions.ModernMenuRenderer(isDark);
+            BackColor = isDark
+                ? System.Drawing.Color.FromArgb(26, 27, 46)
+                : System.Drawing.Color.FromArgb(240, 242, 245);
+
+            if (resolved.StartWithWindows != previousStartWithWindows)
+            {
+                if (resolved.StartWithWindows)
+                {
+                    StartWithWindows.AddStartup(Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+                }
+                else
+                {
+                    StartWithWindows.DeleteStartup(Language.SettingsFormAddStartupAppName ?? Constants.AppName);
+                }
+            }
+
+            if (resolved.IsCountdownNotifierEnabled)
+            {
+                NotifySystem.PrewarmCountdownNotifier();
+            }
+
+            if (!string.Equals(currentLang, resolved.Language, StringComparison.Ordinal))
+            {
+                LanguagePayloadCache.Invalidate();
+            }
+        }
+
+        private void BroadcastSubWindowSettings()
+        {
+            Settings settingsObj = _cachedSettings ?? LoadSettings();
+            foreach (SubWindow subWindow in _subWindows.Values.ToList())
+            {
+                if (!subWindow.IsDisposed)
+                {
+                    subWindow.BroadcastSettings(settingsObj);
+                }
+            }
+        }
+
+        private void BroadcastSubWindowLogs()
+        {
+            var rawLogs = Logger.GetRecentLogs(250);
+            var logs = rawLogs.Select(l => new
+            {
+                actionExecutedDate = l.ActionExecutedDate,
+                actionType = TranslateLogAction(l.ActionType),
+                actionTypeRaw = l.ActionType
+            }).ToList();
+
+            foreach (SubWindow subWindow in _subWindows.Values.ToList())
+            {
+                if (!subWindow.IsDisposed)
+                {
+                    subWindow.BroadcastLogs(logs);
+                }
+            }
         }
 
         // =============== Pause / Resume ===============
