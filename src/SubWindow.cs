@@ -22,7 +22,6 @@ namespace WindowsAutoPowerManager
         private Label _loadingLabel;
         private Timer _loadingDelayTimer;
         private const int LoadingOverlayDelayMs = 350;
-        private const string ConfigFileDialogFilter = "Configuration Files (*.conf)|*.conf|All Files (*.*)|*.*";
 
         public SubWindow(string pageName, string title)
         {
@@ -743,7 +742,7 @@ namespace WindowsAutoPowerManager
                 PostMessage("showToast", new
                 {
                     title = MainForm.Language.MessageTitleError,
-                    message = "Main window is not available.",
+                    message = MainForm.Language.MessageContentMainWindowUnavailable ?? "Main window is not available.",
                     type = "error",
                     duration = 3000
                 });
@@ -752,8 +751,8 @@ namespace WindowsAutoPowerManager
 
             using var dialog = new SaveFileDialog
             {
-                Title = "Export Configuration",
-                Filter = ConfigFileDialogFilter,
+                Title = MainForm.Language.SettingsFormDialogTitleExportConfig ?? "Export Configuration",
+                Filter = GetConfigFileDialogFilter(),
                 DefaultExt = "conf",
                 AddExtension = true,
                 OverwritePrompt = true,
@@ -771,7 +770,7 @@ namespace WindowsAutoPowerManager
                 PostMessage("showToast", new
                 {
                     title = MainForm.Language.MessageTitleError,
-                    message = "Export failed: " + errorMessage,
+                    message = (MainForm.Language.SettingsFormConfigExportFailedPrefix ?? "Export failed:") + " " + errorMessage,
                     type = "error",
                     duration = 3500
                 });
@@ -781,7 +780,7 @@ namespace WindowsAutoPowerManager
             PostMessage("showToast", new
             {
                 title = MainForm.Language.MessageTitleSuccess,
-                message = "Configuration exported successfully.",
+                message = MainForm.Language.SettingsFormConfigExportSuccess ?? "Configuration exported successfully.",
                 type = "success",
                 duration = 2200
             });
@@ -795,7 +794,7 @@ namespace WindowsAutoPowerManager
                 PostMessage("showToast", new
                 {
                     title = MainForm.Language.MessageTitleError,
-                    message = "Main window is not available.",
+                    message = MainForm.Language.MessageContentMainWindowUnavailable ?? "Main window is not available.",
                     type = "error",
                     duration = 3000
                 });
@@ -804,8 +803,8 @@ namespace WindowsAutoPowerManager
 
             using var dialog = new OpenFileDialog
             {
-                Title = "Import Configuration",
-                Filter = ConfigFileDialogFilter,
+                Title = MainForm.Language.SettingsFormDialogTitleImportConfig ?? "Import Configuration",
+                Filter = GetConfigFileDialogFilter(),
                 DefaultExt = "conf",
                 CheckFileExists = true,
                 Multiselect = false,
@@ -822,7 +821,7 @@ namespace WindowsAutoPowerManager
                 PostMessage("showToast", new
                 {
                     title = MainForm.Language.MessageTitleError,
-                    message = "Import failed: " + errorMessage,
+                    message = (MainForm.Language.SettingsFormConfigImportFailedPrefix ?? "Import failed:") + " " + errorMessage,
                     type = "error",
                     duration = 3500
                 });
@@ -832,10 +831,17 @@ namespace WindowsAutoPowerManager
             PostMessage("showToast", new
             {
                 title = MainForm.Language.MessageTitleSuccess,
-                message = "Configuration imported successfully.",
+                message = MainForm.Language.SettingsFormConfigImportSuccess ?? "Configuration imported successfully.",
                 type = "success",
                 duration = 2200
             });
+        }
+
+        private static string GetConfigFileDialogFilter()
+        {
+            string configFilesLabel = MainForm.Language.SettingsFormDialogFilterConfigFiles ?? "Configuration Files";
+            string allFilesLabel = MainForm.Language.SettingsFormDialogFilterAllFiles ?? "All Files";
+            return $"{configFilesLabel} (*.conf)|*.conf|{allFilesLabel} (*.*)|*.*";
         }
 
         // =============== Helpers ===============

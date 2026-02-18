@@ -46,7 +46,6 @@ namespace WindowsAutoPowerManager
         private readonly Dictionary<string, ActionRuntimeState> _actionRuntimeStates =
             new Dictionary<string, ActionRuntimeState>();
         private int _lastBluetoothDiscoveryVersion = -1;
-        private const string ConfigFileDialogFilter = "Configuration Files (*.conf)|*.conf|All Files (*.*)|*.*";
 
         [Flags]
         private enum ActionExecutionResult
@@ -1025,8 +1024,8 @@ namespace WindowsAutoPowerManager
         {
             using var dialog = new SaveFileDialog
             {
-                Title = "Export Configuration",
-                Filter = ConfigFileDialogFilter,
+                Title = Language.SettingsFormDialogTitleExportConfig ?? "Export Configuration",
+                Filter = GetConfigFileDialogFilter(),
                 DefaultExt = "conf",
                 AddExtension = true,
                 OverwritePrompt = true,
@@ -1044,7 +1043,7 @@ namespace WindowsAutoPowerManager
                 PostMessage("showToast", new
                 {
                     title = Language.MessageTitleError,
-                    message = "Export failed: " + errorMessage,
+                    message = (Language.SettingsFormConfigExportFailedPrefix ?? "Export failed:") + " " + errorMessage,
                     type = "error",
                     duration = 3500
                 });
@@ -1054,7 +1053,7 @@ namespace WindowsAutoPowerManager
             PostMessage("showToast", new
             {
                 title = Language.MessageTitleSuccess,
-                message = "Configuration exported successfully.",
+                message = Language.SettingsFormConfigExportSuccess ?? "Configuration exported successfully.",
                 type = "success",
                 duration = 2200
             });
@@ -1064,8 +1063,8 @@ namespace WindowsAutoPowerManager
         {
             using var dialog = new OpenFileDialog
             {
-                Title = "Import Configuration",
-                Filter = ConfigFileDialogFilter,
+                Title = Language.SettingsFormDialogTitleImportConfig ?? "Import Configuration",
+                Filter = GetConfigFileDialogFilter(),
                 DefaultExt = "conf",
                 CheckFileExists = true,
                 Multiselect = false,
@@ -1082,7 +1081,7 @@ namespace WindowsAutoPowerManager
                 PostMessage("showToast", new
                 {
                     title = Language.MessageTitleError,
-                    message = "Import failed: " + errorMessage,
+                    message = (Language.SettingsFormConfigImportFailedPrefix ?? "Import failed:") + " " + errorMessage,
                     type = "error",
                     duration = 3500
                 });
@@ -1092,10 +1091,17 @@ namespace WindowsAutoPowerManager
             PostMessage("showToast", new
             {
                 title = Language.MessageTitleSuccess,
-                message = "Configuration imported successfully.",
+                message = Language.SettingsFormConfigImportSuccess ?? "Configuration imported successfully.",
                 type = "success",
                 duration = 2200
             });
+        }
+
+        private string GetConfigFileDialogFilter()
+        {
+            string configFilesLabel = Language.SettingsFormDialogFilterConfigFiles ?? "Configuration Files";
+            string allFilesLabel = Language.SettingsFormDialogFilterAllFiles ?? "All Files";
+            return $"{configFilesLabel} (*.conf)|*.conf|{allFilesLabel} (*.*)|*.*";
         }
 
         public bool ExportDataToFile(string filePath, out string errorMessage)

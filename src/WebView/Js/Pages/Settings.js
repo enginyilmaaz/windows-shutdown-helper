@@ -84,8 +84,8 @@ window.SettingsPage = {
             '</div>' +
 
             '<div class="settings-actions">' +
-                '<button class="btn btn-secondary" id="set-import-conf">Import (.conf)</button>' +
-                '<button class="btn btn-secondary" id="set-export-conf">Export (.conf)</button>' +
+                '<button class="btn btn-secondary" id="set-import-conf">' + (L('SettingsFormButtonImportConfig') || 'Import (.conf)') + '</button>' +
+                '<button class="btn btn-secondary" id="set-export-conf">' + (L('SettingsFormButtonExportConfig') || 'Export (.conf)') + '</button>' +
                 '<button class="btn btn-secondary" id="set-cancel">' + (L('SettingsFormButtonCancel') || 'Cancel') + '</button>' +
                 '<button class="btn btn-success" id="set-save">' + (L('SettingsFormButtonSave') || 'Save') + '</button>' +
             '</div>' +

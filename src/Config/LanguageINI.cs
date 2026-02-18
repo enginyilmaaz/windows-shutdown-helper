@@ -127,7 +127,18 @@
         public string SettingsFormCheckboxEnabled { get; set; }
         public string SettingsFormButtonSave { get; set; }
         public string SettingsFormButtonCancel { get; set; }
+        public string SettingsFormButtonImportConfig { get; set; }
+        public string SettingsFormButtonExportConfig { get; set; }
+        public string SettingsFormDialogTitleImportConfig { get; set; }
+        public string SettingsFormDialogTitleExportConfig { get; set; }
+        public string SettingsFormDialogFilterConfigFiles { get; set; }
+        public string SettingsFormDialogFilterAllFiles { get; set; }
+        public string SettingsFormConfigImportSuccess { get; set; }
+        public string SettingsFormConfigExportSuccess { get; set; }
+        public string SettingsFormConfigImportFailedPrefix { get; set; }
+        public string SettingsFormConfigExportFailedPrefix { get; set; }
         public string SettingsFormAddStartupAppName { get; set; }
+        public string MessageContentMainWindowUnavailable { get; set; }
         public string MessageContentSettingsSaved { get; set; }
         public string MessageContentSettingSavedWithLangChanged { get; set; }
 
